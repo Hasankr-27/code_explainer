@@ -101,8 +101,12 @@ async def analyze_code(request: Request, file: UploadFile = File(...)):
         )
 
         raw = message.content[0].text.strip()
+        # Strip markdown code fences (```json ... ``` or ``` ... ```)
         if raw.startswith("```"):
-            raw = "\n".join(raw.split("\n")[1:-1])
+            raw = raw.split("```", 2)[1]  # get content between first pair of ```
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
 
         result = json.loads(raw)
 
