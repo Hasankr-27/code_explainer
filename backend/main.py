@@ -107,17 +107,25 @@ async def analyze_code(request: Request, file: UploadFile = File(...)):
         )
 
         raw = message.content[0].text.strip()
-        # Strip markdown code fences (```json ... ``` or ``` ... ```)
-        if raw.startswith("```"):
-            raw = raw.split("```", 2)[1]  # get content between first pair of ```
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
+        # Strip markdown code fences robustly
+        if "```" in raw:
+            parts = raw.split("```")
+            # parts[1] is the content inside the first fence pair
+            if len(parts) >= 3:
+                raw = parts[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+        # Find JSON object boundaries as fallback
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start != -1 and end != -1:
+            raw = raw[start:end + 1]
 
         result = json.loads(raw)
 
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="API yanıtı JSON olarak ayrıştırılamadı.")
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"API yanıtı JSON olarak ayrıştırılamadı: {e}")
     except anthropic.APIStatusError as e:
         raise HTTPException(status_code=502, detail=f"Claude API hatası: {e.message}")
     except anthropic.APIConnectionError:
