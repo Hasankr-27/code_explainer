@@ -228,7 +228,6 @@ function setLoading(on) {
 function renderResults(data) {
     resultsContainer.innerHTML = "";
 
-    // File name meta row
     const meta = el("div", "result-meta");
     meta.innerHTML = `Dosya: <strong>${escHtml(data.filename)}</strong>`;
     resultsContainer.appendChild(meta);
@@ -240,26 +239,15 @@ function renderResults(data) {
         return [box];
     }));
 
-    // Errors
-    resultsContainer.appendChild(buildSection("Hatalar ve Sorunlar", () => {
-        if (data.errors && data.errors.length > 0) {
-            const list = el("div", "errors-list");
-            data.errors.forEach((msg) => {
-                const item = el("div", "error-item");
-                item.innerHTML = `<em class="error-item-icon">⚠</em><span>${escHtml(msg)}</span>`;
-                list.appendChild(item);
-            });
-            return [list];
-        }
-        const ok = el("div", "no-errors");
-        ok.innerHTML = `<span>✓</span> Mantıksal veya algoritmik hata bulunamadı.`;
-        return [ok];
-    }));
-
     // Classes / Functions
     if (data.classes && data.classes.length > 0) {
+        const classCount = data.classes.filter(c => c.type === "class").length;
+        const fnCount = data.classes.filter(c => c.type === "function").length;
+        const parts = [];
+        if (classCount > 0) parts.push(`${classCount} sınıf`);
+        if (fnCount > 0) parts.push(`${fnCount} fonksiyon`);
         resultsContainer.appendChild(buildSection(
-            `Sınıflar ve Fonksiyonlar (${data.classes.length})`,
+            `Yapılar — ${parts.join(", ")}`,
             () => {
                 const cards = el("div", "class-cards");
                 data.classes.forEach((item) => {
@@ -280,23 +268,59 @@ function buildSection(title, contentFn) {
     return section;
 }
 
+const TYPE_LABELS = { class: "sınıf", function: "fonksiyon", method: "metot" };
+
 function buildClassCard(item) {
     const type = (item.type || "function").toLowerCase();
-    const card = el("div", "class-card");
+    const card = el("div", `class-card type-${type}`);
 
+    // Header
     const header = el("div", "class-card-header");
     const badge = el("span", `type-badge ${type}`);
-    badge.textContent = type;
+    badge.textContent = TYPE_LABELS[type] || type;
     const name = el("span", "class-card-name");
     name.textContent = item.name;
     header.appendChild(badge);
     header.appendChild(name);
+    card.appendChild(header);
 
+    // Explanation
     const body = el("div", "class-card-body");
     body.textContent = item.explanation;
-
-    card.appendChild(header);
     card.appendChild(body);
+
+    // Methods (nested inside class)
+    if (type === "class" && item.methods && item.methods.length > 0) {
+        const methodsWrap = el("div", "methods-wrap");
+        const methodsLabel = el("div", "methods-label");
+        methodsLabel.textContent = `Metotlar (${item.methods.length})`;
+        methodsWrap.appendChild(methodsLabel);
+
+        const methodsList = el("div", "methods-list");
+        item.methods.forEach((m, i) => {
+            const isLast = i === item.methods.length - 1;
+            const mCard = el("div", `method-card${isLast ? " last" : ""}`);
+
+            const mHeader = el("div", "method-header");
+            const mBadge = el("span", "type-badge method");
+            mBadge.textContent = "metot";
+            const mName = el("span", "class-card-name");
+            mName.textContent = m.name;
+            mHeader.appendChild(mBadge);
+            mHeader.appendChild(mName);
+
+            const mBody = el("div", "method-body");
+            mBody.textContent = m.explanation;
+
+            mCard.appendChild(mHeader);
+            mCard.appendChild(mBody);
+            methodsList.appendChild(mCard);
+        });
+
+        methodsWrap.appendChild(methodsList);
+        card.appendChild(methodsWrap);
+    }
+
     return card;
 }
 
