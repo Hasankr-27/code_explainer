@@ -31,21 +31,53 @@ MAX_SESSION_REQUESTS = 10
 MAX_FILE_SIZE = 100 * 1024  # 100KB
 SUPPORTED_EXTENSIONS = {".py", ".js", ".java", ".c", ".cpp"}
 
-SYSTEM_PROMPT = """Sen bir kod analiz uzmanısın. Verilen kodu analiz et ve aşağıdaki alanları içeren yapılandırılmış bir JSON yanıtı döndür. TÜM açıklamalar Türkçe olmalı.
+SYSTEM_PROMPT = "Sen bir kod analiz uzmanısın. Verilen kodu Türkçe olarak analiz et ve analyze_code aracını kullanarak sonucu döndür."
 
-- "summary": Kodun genel olarak ne yaptığının açık ve kapsamlı Türkçe açıklaması
-- "errors": Bulunan mantıksal veya algoritmik hataları açıklayan dize dizisi (hiçbiri bulunamazsa boş dizi)
-- "classes": Her üst düzey sınıf veya bağımsız fonksiyon için nesneler dizisi, her biri şunları içerir:
-  - "name": tanımlayıcı adı
-  - "type": "class" veya "function"
-  - "explanation": amacın ve parametrelerin Türkçe detaylı açıklaması
-  - "methods": Eğer type "class" ise içindeki metotların dizisi; her metot şunları içerir:
-    - "name": metot adı
-    - "type": "method"
-    - "explanation": metotun amacının, parametrelerinin ve dönüş değerinin Türkçe açıklaması
-    Eğer type "function" ise boş dizi [].
-
-Sadece geçerli JSON döndür, markdown biçimlendirmesi, kod çitleri veya ekstra metin olmadan."""
+ANALYZE_TOOL = {
+    "name": "analyze_code",
+    "description": "Kod analizinin yapılandırılmış sonucunu döndür",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "summary": {
+                "type": "string",
+                "description": "Kodun genel olarak ne yaptığının açık ve kapsamlı Türkçe açıklaması"
+            },
+            "errors": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Bulunan mantıksal veya algoritmik hatalar (yoksa boş liste)"
+            },
+            "classes": {
+                "type": "array",
+                "description": "Üst düzey sınıflar ve bağımsız fonksiyonlar",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "type": {"type": "string", "enum": ["class", "function"]},
+                        "explanation": {"type": "string", "description": "Türkçe detaylı açıklama"},
+                        "methods": {
+                            "type": "array",
+                            "description": "Sınıf içindeki metotlar (fonksiyon ise boş liste)",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "type": {"type": "string", "enum": ["method"]},
+                                    "explanation": {"type": "string", "description": "Türkçe açıklama"}
+                                },
+                                "required": ["name", "type", "explanation"]
+                            }
+                        }
+                    },
+                    "required": ["name", "type", "explanation", "methods"]
+                }
+            }
+        },
+        "required": ["summary", "errors", "classes"]
+    }
+}
 
 
 @app.get("/health")
@@ -98,34 +130,19 @@ async def analyze_code(request: Request, file: UploadFile = File(...)):
             model="claude-sonnet-4-6",
             max_tokens=4096,
             system=SYSTEM_PROMPT,
+            tools=[ANALYZE_TOOL],
+            tool_choice={"type": "tool", "name": "analyze_code"},
             messages=[
                 {
                     "role": "user",
-                    "content": f"Analyze this {ext[1:].upper()} code from '{filename}':\n\n{code_text}",
+                    "content": f"Bu {ext[1:].upper()} kodunu analiz et (dosya: '{filename}'):\n\n{code_text}",
                 }
             ],
         )
 
-        raw = message.content[0].text.strip()
-        # Strip markdown code fences robustly
-        if "```" in raw:
-            parts = raw.split("```")
-            # parts[1] is the content inside the first fence pair
-            if len(parts) >= 3:
-                raw = parts[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
-        # Find JSON object boundaries as fallback
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start != -1 and end != -1:
-            raw = raw[start:end + 1]
+        tool_block = next(b for b in message.content if b.type == "tool_use")
+        result = tool_block.input
 
-        result = json.loads(raw)
-
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"API yanıtı JSON olarak ayrıştırılamadı: {e}")
     except anthropic.APIStatusError as e:
         raise HTTPException(status_code=502, detail=f"Claude API hatası: {e.message}")
     except anthropic.APIConnectionError:
