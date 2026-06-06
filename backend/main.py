@@ -31,15 +31,21 @@ MAX_SESSION_REQUESTS = 10
 MAX_FILE_SIZE = 100 * 1024  # 100KB
 SUPPORTED_EXTENSIONS = {".py", ".js", ".java", ".c", ".cpp"}
 
-SYSTEM_PROMPT = """You are a code analysis expert. Analyze the provided code and return a structured JSON response with exactly these fields:
-- "summary": A clear, comprehensive description of what the code does overall
-- "errors": An array of strings describing logical or algorithmic errors found (empty array if none found)
-- "classes": An array of objects for each class/function/method found, each containing:
-  - "name": the identifier name
-  - "type": "class", "function", or "method"
-  - "explanation": detailed explanation of purpose, parameters, and return value
+SYSTEM_PROMPT = """Sen bir kod analiz uzmanısın. Verilen kodu analiz et ve aşağıdaki alanları içeren yapılandırılmış bir JSON yanıtı döndür. TÜM açıklamalar Türkçe olmalı.
 
-Return ONLY valid JSON with no markdown formatting, code fences, or extra text."""
+- "summary": Kodun genel olarak ne yaptığının açık ve kapsamlı Türkçe açıklaması
+- "errors": Bulunan mantıksal veya algoritmik hataları açıklayan dize dizisi (hiçbiri bulunamazsa boş dizi)
+- "classes": Her üst düzey sınıf veya bağımsız fonksiyon için nesneler dizisi, her biri şunları içerir:
+  - "name": tanımlayıcı adı
+  - "type": "class" veya "function"
+  - "explanation": amacın ve parametrelerin Türkçe detaylı açıklaması
+  - "methods": Eğer type "class" ise içindeki metotların dizisi; her metot şunları içerir:
+    - "name": metot adı
+    - "type": "method"
+    - "explanation": metotun amacının, parametrelerinin ve dönüş değerinin Türkçe açıklaması
+    Eğer type "function" ise boş dizi [].
+
+Sadece geçerli JSON döndür, markdown biçimlendirmesi, kod çitleri veya ekstra metin olmadan."""
 
 
 @app.get("/health")
@@ -89,7 +95,7 @@ async def analyze_code(request: Request, file: UploadFile = File(...)):
 
     try:
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4096,
             system=SYSTEM_PROMPT,
             messages=[
@@ -101,8 +107,12 @@ async def analyze_code(request: Request, file: UploadFile = File(...)):
         )
 
         raw = message.content[0].text.strip()
+        # Strip markdown code fences (```json ... ``` or ``` ... ```)
         if raw.startswith("```"):
-            raw = "\n".join(raw.split("\n")[1:-1])
+            raw = raw.split("```", 2)[1]  # get content between first pair of ```
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
 
         result = json.loads(raw)
 

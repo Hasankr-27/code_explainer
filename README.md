@@ -6,7 +6,7 @@ A web app that analyzes source code using the Claude API and explains what it do
 
 - **Frontend**: Plain HTML, CSS, JavaScript
 - **Backend**: FastAPI (Python)
-- **AI**: Anthropic Claude API (`claude-sonnet-4-20250514`)
+- **AI**: Anthropic Claude API (`claude-sonnet-4-6`)
 
 ## Features
 
