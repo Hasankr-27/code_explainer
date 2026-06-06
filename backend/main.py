@@ -140,13 +140,22 @@ async def analyze_code(request: Request, file: UploadFile = File(...)):
             ],
         )
 
-        tool_block = next(b for b in message.content if b.type == "tool_use")
-        result = tool_block.input
+        tool_blocks = [b for b in message.content if b.type == "tool_use"]
+        if not tool_blocks:
+            content_text = " | ".join(
+                b.text for b in message.content if hasattr(b, "text")
+            )
+            raise HTTPException(status_code=500, detail=f"Claude tool yanıtı döndürmedi: {content_text[:300]}")
+        result = tool_blocks[0].input
 
+    except HTTPException:
+        raise
     except anthropic.APIStatusError as e:
         raise HTTPException(status_code=502, detail=f"Claude API hatası: {e.message}")
     except anthropic.APIConnectionError:
         raise HTTPException(status_code=503, detail="Claude API'ye bağlanılamadı.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Beklenmeyen hata: {str(e)}")
 
     sessions[session_id] += 1
     remaining = MAX_SESSION_REQUESTS - sessions[session_id]
