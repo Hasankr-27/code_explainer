@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Explainer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+    <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+        Code Explainer
+    </div>
+    <div id="file-indicator" class="file-indicator hidden">
+        <span id="active-file-name"></span>
+        <span id="active-file-lang" class="lang-chip"></span>
+    </div>
+</header>
+
+<main class="app-main">
+
+    <!-- LEFT PANEL -->
+    <aside class="left-panel">
+
+        <!-- Drop Zone (shown when no files) -->
+        <div id="upload-section" class="upload-section">
+            <div id="drop-zone" class="drop-zone">
+                <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <p class="drop-main">Drop files here</p>
+                <p class="drop-or">or <button id="browse-btn" class="text-btn">browse</button></p>
+                <p class="drop-hint">.py &nbsp;.js &nbsp;.java &nbsp;.c &nbsp;.cpp &nbsp;&middot;&nbsp; max 100 KB</p>
+                <input type="file" id="file-input" multiple accept=".py,.js,.java,.c,.cpp" hidden>
+            </div>
+        </div>
+
+        <!-- File List (shown when files exist) -->
+        <div id="file-list-section" class="file-list-section hidden">
+            <div class="panel-label">
+                FILES
+                <button id="add-file-btn" class="icon-btn" title="Add more files">＋</button>
+            </div>
+            <ul id="file-list" class="file-list"></ul>
+        </div>
+
+        <!-- Code Viewer -->
+        <div id="code-viewer-section" class="code-viewer-section hidden">
+            <div class="panel-label">SOURCE</div>
+            <div class="code-container" id="code-container">
+                <div class="line-nums" id="line-nums"></div>
+                <div class="code-area">
+                    <div class="hl-overlay" id="hl-overlay"></div>
+                    <pre class="code-pre"><code id="code-el"></code></pre>
+                </div>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- RIGHT PANEL -->
+    <section class="right-panel">
+        <div class="panel-label" id="structure-label">STRUCTURE</div>
+        <div class="structure-body" id="structure-body">
+            <div class="empty-state" id="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                <p>Upload a source file to explore its structure</p>
+                <span>Supports Python, JavaScript, Java, C, C++</span>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<!-- Error Toast -->
+<div class="error-toast hidden" id="error-toast">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+    </svg>
+    <span id="error-msg"></span>
+    <button id="close-toast">×</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
