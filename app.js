@@ -28,7 +28,8 @@ const TRANSLATIONS = {
         errUnsupported:'is not a supported file type. Use .py .js .java .c .cpp',
         errTooBig:'exceeds the 50 KB limit',
         imports:'IMPORTS', importsCount:'imports',
-        fieldsSect:'FIELDS', methods:'METHODS', noFields:'No fields'
+        fieldsSect:'FIELDS', methods:'METHODS', noFields:'No fields',
+        objCreations:'Object Creations', noObjCreations:'No instantiations'
     },
     tr: {
         files:'DOSYALAR', source:'KAYNAK',
@@ -49,7 +50,8 @@ const TRANSLATIONS = {
         errUnsupported:'desteklenmeyen dosya türü. .py .js .java .c .cpp kullanın',
         errTooBig:'50 KB sınırını aşıyor',
         imports:'İÇE AKTARMALAR', importsCount:'içe aktarma',
-        fieldsSect:'ALANLAR', methods:'METODLAR', noFields:'Alan yok'
+        fieldsSect:'ALANLAR', methods:'METODLAR', noFields:'Alan yok',
+        objCreations:'Oluşturulan Nesneler', noObjCreations:'Nesne oluşturulmadı'
     }
 };
 
@@ -182,6 +184,8 @@ function renderAll() {
         const f = files[activeIdx];
         activeFileName.textContent = f.name;
         activeFileLang.textContent = f.ext.toUpperCase();
+        // Run once; also stamps m.newCalls onto each method object
+        f.relations = analyzeRelations(f.content, f.parsed.classes, f.ext);
         renderFileList();
         renderCode(f);
         renderStructure(f);
@@ -564,10 +568,99 @@ function buildMethodCard(m) {
         card.appendChild(p);
     }
 
+    if (m.newCalls && m.newCalls.length) {
+        const ncHdr = mk('div', 'nc-section-hdr');
+        ncHdr.textContent = t('objCreations');
+        card.appendChild(ncHdr);
+
+        const ncList = mk('div', 'nc-list');
+        m.newCalls.forEach(nc => {
+            const row = mk('div', 'nc-row');
+
+            const badge = mk('span', 'badge badge-new');
+            badge.textContent = 'NEW';
+
+            const cls = mk('span', 'nc-cls');
+            cls.textContent = nc.className;
+
+            row.append(badge, cls);
+
+            if (nc.varName) {
+                const arrow = mk('span', 'nc-arrow');
+                arrow.textContent = '→';
+                const vname = mk('span', 'nc-var');
+                vname.textContent = nc.varName;
+                row.append(arrow, vname);
+                if (nc.varType && nc.varType !== nc.className) {
+                    const vtype = mk('span', 'nc-vtype');
+                    vtype.textContent = nc.varType;
+                    row.appendChild(vtype);
+                }
+            }
+
+            const lineEl = mk('span', 'nc-line');
+            lineEl.textContent = 'L' + nc.line;
+            row.appendChild(lineEl);
+
+            ncList.appendChild(row);
+        });
+        card.appendChild(ncList);
+    }
+
     return card;
 }
 
 // ─── Relations Analysis ───────────────────────────────────────────────────────
+
+/* Returns [{className, varName, varType, line}] for each instantiation in the
+   given line range (1-indexed). Handles Java, JS/TS, Python, and C. */
+function extractNewCalls(lines, startLine, endLine, classNames, ext) {
+    const results = [];
+    const CTRL = new Set(['if','while','for','switch','return','catch','else','do','case']);
+
+    for (let i = startLine - 1; i < Math.min(endLine, lines.length); i++) {
+        const raw  = lines[i];
+        const tr   = raw.trim();
+        const lineNum = i + 1;
+
+        if (ext === 'py') {
+            // var = ClassName(...)
+            const m = tr.match(/^(\w+)\s*=\s*(\w+)\s*\(/);
+            if (m && classNames.has(m[2])) {
+                results.push({ className: m[2], varName: m[1], varType: m[2], line: lineNum });
+            }
+        } else if (ext === 'c') {
+            // struct TypeName varName
+            const m = tr.match(/\bstruct\s+(\w+)\s+(\w+)/);
+            if (m) {
+                results.push({ className: m[1], varName: m[2], varType: 'struct ' + m[1], line: lineNum });
+            }
+        } else {
+            // Java / JS / TS: find every `new ClassName(` on this line
+            const newRe = /\bnew\s+(\w+)\s*[(<]/g;
+            let nm;
+            while ((nm = newRe.exec(raw)) !== null) {
+                const className = nm[1];
+                if (!classNames.has(className)) continue;
+
+                let varName = null, varType = null;
+                if (ext === 'java') {
+                    // Type varName = new ClassName  (or generics/arrays)
+                    const vm = raw.match(/([\w][\w<>\[\]]*)\s+(\w+)\s*=\s*new\s+[\w<>\[\]]+\s*[(<]/);
+                    if (vm && !CTRL.has(vm[2])) { varType = vm[1]; varName = vm[2]; }
+                } else {
+                    // const/let/var varName = new ClassName  OR  varName = new ClassName
+                    const vm = raw.match(/(?:(?:const|let|var)\s+)?(\w+)\s*=\s*new\s+(\w+)\s*[(<]/);
+                    if (vm && vm[2] === className && !CTRL.has(vm[1]) && vm[1] !== 'new') {
+                        varName = vm[1];
+                    }
+                }
+                results.push({ className, varName, varType, line: lineNum });
+            }
+        }
+    }
+    return results;
+}
 
 function analyzeRelations(code, classes, ext) {
     const lines = code.split('\n');
@@ -593,29 +686,24 @@ function analyzeRelations(code, classes, ext) {
 
     const instantiation = {};
     classes.forEach(cls => {
-        const body = lines.slice(cls.lineStart - 1, cls.lineEnd).join('\n');
-        const creates = new Set();
+        const created = new Set();
         const re = /\bnew\s+(\w+)\s*[(<[]/g;
+        const body = lines.slice(cls.lineStart - 1, cls.lineEnd).join('\n');
         let m;
         while ((m = re.exec(body)) !== null) {
             const name = m[1];
-            if (classNames.has(name) && name !== cls.name) creates.add(name);
+            if (classNames.has(name) && name !== cls.name) created.add(name);
         }
-        if (creates.size) instantiation[cls.name] = [...creates];
+        if (created.size) instantiation[cls.name] = [...created];
     });
 
+    // Per-method: extract rich new-call data and store directly on method objects
     const methodCreates = {};
     classes.forEach(cls => {
-        cls.methods.forEach(m => {
-            const body = lines.slice(m.lineStart - 1, m.lineEnd).join('\n');
-            const creates = new Set();
-            const re = /\bnew\s+(\w+)\s*[(<[]/g;
-            let match;
-            while ((match = re.exec(body)) !== null) {
-                const name = match[1];
-                if (classNames.has(name)) creates.add(name);
-            }
-            if (creates.size) methodCreates[`${cls.name}.${m.name}`] = [...creates];
+        cls.methods.forEach(method => {
+            const calls = extractNewCalls(lines, method.lineStart, method.lineEnd, classNames, ext);
+            method.newCalls = calls;   // attach to method for Structure tab
+            if (calls.length) methodCreates[`${cls.name}.${method.name}`] = calls;
         });
     });
 
@@ -635,7 +723,7 @@ function renderRelations(f) {
         return;
     }
 
-    const rel = analyzeRelations(f.content, classes, f.ext);
+    const rel = f.relations;
 
     const typeSection = relSection('type', t('secTypes'));
     classes.forEach(cls => {
@@ -738,13 +826,18 @@ function renderRelations(f) {
                 if (mc && mc.length) {
                     const mRow = mk('div', 'rel-row');
                     const lbl = mk('span', 'rel-row-label');
-                    lbl.style.fontFamily = 'var(--mono)';
+                    lbl.style.fontFamily = 'var(--font-code)';
                     lbl.textContent = m.name + '()';
                     const targets = mk('div', 'rel-targets');
-                    mc.forEach(c => {
+                    mc.forEach(nc => {
                         const tEl = mk('span', 'rel-target new');
-                        tEl.textContent = 'new ' + c;
-                        tEl.addEventListener('click', () => { switchTab('struct'); highlightLines(m.lineStart, m.lineEnd); });
+                        let label = 'new ' + nc.className;
+                        if (nc.varName) label += ' → ' + nc.varName;
+                        tEl.textContent = label;
+                        const lineChip = mk('span', 'nc-line-chip');
+                        lineChip.textContent = 'L' + nc.line;
+                        tEl.appendChild(lineChip);
+                        tEl.addEventListener('click', () => { switchTab('struct'); highlightLines(nc.line, nc.line); });
                         targets.appendChild(tEl);
                     });
                     mRow.append(lbl, targets);
@@ -798,7 +891,7 @@ function renderDiagram(f) {
         return;
     }
 
-    const rel = analyzeRelations(f.content, classes, f.ext);
+    const rel = f.relations;
 
     const BOX_W      = 270;
     const HDR_H      = 52;

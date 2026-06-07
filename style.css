@@ -497,6 +497,47 @@ body {
     padding: 6px 10px; font-style: italic;
 }
 
+/* Object Creations inside method card */
+.nc-section-hdr {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: #a78bfa;
+    padding: 4px 10px 3px;
+    border-top: 1px solid rgba(167,139,250,.15);
+    background: rgba(167,139,250,.04);
+}
+.nc-list { display: flex; flex-direction: column; gap: 1px; padding: 2px 8px 6px; }
+.nc-row {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 4px; min-height: 28px; flex-wrap: wrap;
+}
+.badge-new {
+    background: rgba(167,139,250,.15); color: #a78bfa;
+    flex-shrink: 0;
+}
+.nc-cls {
+    font-family: var(--font-code); font-size: 11px; font-weight: 600;
+    color: #a78bfa;
+}
+.nc-arrow { color: var(--text-dim); font-size: 10px; }
+.nc-var {
+    font-family: var(--font-code); font-size: 11px;
+    color: var(--text);
+}
+.nc-vtype {
+    font-family: var(--font-code); font-size: 10px;
+    color: var(--text-dim); font-style: italic;
+}
+.nc-line {
+    margin-left: auto; font-size: 10px;
+    color: var(--text-dim); flex-shrink: 0;
+}
+/* Line chip inside rel-target for method creates */
+.nc-line-chip {
+    display: inline-block; margin-left: 5px;
+    font-size: 9px; color: var(--text-dim);
+    background: rgba(255,255,255,.06); border-radius: 3px; padding: 0 4px;
+}
+
 /* ─── Relations Panel ─────────────────────────────────────────────────────── */
 
 .rel-section { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
