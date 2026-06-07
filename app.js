@@ -131,12 +131,17 @@ function addFiles(incoming) {
 
         const reader = new FileReader();
         reader.onload = e => {
-            const content = e.target.result;
-            const extKey  = ext.slice(1);
-            files.push({ name: f.name, size: f.size, ext: extKey, content, parsed: parseCode(content, extKey) });
-            if (activeIdx === null) activeIdx = files.length - 1;
-            renderAll();
+            try {
+                const content = e.target.result;
+                const extKey  = ext.slice(1);
+                files.push({ name: f.name, size: f.size, ext: extKey, content, parsed: parseCode(content, extKey) });
+                if (activeIdx === null) activeIdx = files.length - 1;
+                renderAll();
+            } catch (err) {
+                showError(`"${f.name}" — parse error: ${err.message}`);
+            }
         };
+        reader.onerror = () => showError(`"${f.name}" — ${t('errRead') || 'could not read file'}`);
         reader.readAsText(f);
     }
 }
@@ -181,16 +186,21 @@ function renderAll() {
     fileIndicator.classList.toggle('hidden', !hasFiles);
 
     if (hasFiles) {
-        const f = files[activeIdx];
-        activeFileName.textContent = f.name;
-        activeFileLang.textContent = f.ext.toUpperCase();
-        // Run once; also stamps m.newCalls onto each method object
-        f.relations = analyzeRelations(f.content, f.parsed.classes, f.ext);
-        renderFileList();
-        renderCode(f);
-        renderStructure(f);
-        renderRelations(f);
-        renderDiagram(f);
+        try {
+            const f = files[activeIdx];
+            activeFileName.textContent = f.name;
+            activeFileLang.textContent = f.ext.toUpperCase();
+            // Run once; also stamps m.newCalls onto each method object
+            f.relations = analyzeRelations(f.content, f.parsed.classes, f.ext);
+            renderFileList();
+            renderCode(f);
+            renderStructure(f);
+            renderRelations(f);
+            renderDiagram(f);
+        } catch (err) {
+            console.error('renderAll error:', err);
+            showError('Render error: ' + err.message);
+        }
     } else {
         structureBody.innerHTML = '';
         structureBody.appendChild(emptyState);
@@ -407,10 +417,10 @@ function buildClassCard(cls, type) {
     mHdr.textContent = t('methods');
     body.appendChild(mHdr);
 
-    if (cls.methods.length) {
+    if ((cls.methods || []).length) {
         const list = mk('div', 'methods-list');
         list.style.margin = '0 10px 10px';
-        cls.methods.forEach(m => list.appendChild(buildMethodCard(m)));
+        (cls.methods || []).forEach(m => list.appendChild(buildMethodCard(m)));
         body.appendChild(list);
     } else {
         const nm = mk('div', 'no-methods');
@@ -708,7 +718,7 @@ function analyzeRelations(code, classes, ext) {
     // Per-method: extract all new-calls for Structure tab; filter to known classes for Relations
     const methodCreates = {};
     classes.forEach(cls => {
-        cls.methods.forEach(method => {
+        (cls.methods || []).forEach(method => {
             const calls = extractNewCalls(lines, method.lineStart, method.lineEnd, classNames, ext);
             method.newCalls = calls;   // ALL calls → Structure tab Object Creations
             const relCalls = calls.filter(c => classNames.has(c.className));
@@ -829,7 +839,7 @@ function renderRelations(f) {
             const rowsWrap = mk('div', 'rel-rows');
             rowsWrap.appendChild(relRow(t('creates'), created.map(c => ({ text: c, cls: 'new' }))));
 
-            cls && cls.methods.forEach(m => {
+            cls && (cls.methods || []).forEach(m => {
                 const key = `${creator}.${m.name}`;
                 const mc = rel.methodCreates[key];
                 if (mc && mc.length) {
@@ -921,7 +931,7 @@ function renderDiagram(f) {
     };
 
     const shownF = cls => Math.min((cls.fields || []).length, MAX_FIELDS);
-    const shownM = cls => Math.min(cls.methods.length, MAX_METHS);
+    const shownM = cls => Math.min((cls.methods || []).length, MAX_METHS);
     const boxH = cls => {
         const sf = shownF(cls);
         const sm = shownM(cls);
@@ -997,7 +1007,7 @@ function renderDiagram(f) {
         const ct    = rel.classType[cls.name] || 'concrete';
         const color = TYPE_COLOR[ct] || '#4ec9b0';
         const fields  = (cls.fields || []).slice(0, MAX_FIELDS);
-        const methods = cls.methods.slice(0, MAX_METHS);
+        const methods = (cls.methods || []).slice(0, MAX_METHS);
 
         const g = svgEl('g');
         g.setAttribute('class', 'diagram-box-group');
@@ -1172,14 +1182,14 @@ function renderDiagram(f) {
                 curY += ROW_H;
             });
 
-            if (cls.methods.length > MAX_METHS) {
+            if ((cls.methods || []).length > MAX_METHS) {
                 const more = svgEl('text');
                 more.setAttribute('x', '14');
                 more.setAttribute('y', String(curY + 10));
                 more.setAttribute('font-size', '10');
                 more.setAttribute('fill', '#555');
                 more.setAttribute('font-family', 'Inter, sans-serif');
-                more.textContent = `+${cls.methods.length - MAX_METHS} more`;
+                more.textContent = `+${(cls.methods || []).length - MAX_METHS} more`;
                 g.appendChild(more);
             }
         }
@@ -1280,14 +1290,19 @@ function svgEl(tag) {
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 
 function parseCode(code, ext) {
-    switch (ext) {
-        case 'py':   return parsePython(code);
-        case 'js':   return parseJS(code);
-        case 'ts':
-        case 'tsx':  return parseTS(code);
-        case 'java': return parseJava(code);
-        case 'c':    return parseCLike(code);
-        default:     return { classes: [], functions: [], imports: [] };
+    try {
+        switch (ext) {
+            case 'py':   return parsePython(code);
+            case 'js':   return parseJS(code);
+            case 'ts':
+            case 'tsx':  return parseTS(code);
+            case 'java': return parseJava(code);
+            case 'c':    return parseCLike(code);
+            default:     return { classes: [], functions: [], imports: [] };
+        }
+    } catch (err) {
+        console.error('parseCode error:', err);
+        return { classes: [], functions: [], imports: [] };
     }
 }
 
