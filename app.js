@@ -1,6 +1,6 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MAX_SIZE  = 100 * 1024;
+const MAX_SIZE  = 50 * 1024;
 const SUPPORTED = ['.py', '.js', '.java', '.c', '.cpp'];
 
 const LANG_COLOR = { py:'#3572A5', js:'#c9a800', java:'#B07219', c:'#555', cpp:'#f34b7d' };
@@ -270,11 +270,18 @@ function buildFnCard(fn) {
 
     card.appendChild(hdr);
 
-    if (fn.params) {
+    if (fn.params || fn.description) {
         const body = mk('div', 'c-body');
-        const p = mk('div', 'c-params');
-        p.innerHTML = `<span class="lbl">params</span>${esc(fn.params)}`;
-        body.appendChild(p);
+        if (fn.description) {
+            const d = mk('div', 'c-desc');
+            d.textContent = fn.description;
+            body.appendChild(d);
+        }
+        if (fn.params) {
+            const p = mk('div', 'c-params');
+            p.innerHTML = `<span class="lbl">params</span>${esc(fn.params)}`;
+            body.appendChild(p);
+        }
         card.appendChild(body);
     }
 
@@ -299,6 +306,11 @@ function buildMethodCard(m) {
     });
     card.appendChild(hdr);
 
+    if (m.description) {
+        const d = mk('div', 'm-desc');
+        d.textContent = m.description;
+        card.appendChild(d);
+    }
     if (m.params) {
         const p = mk('div', 'm-params');
         p.innerHTML = `<span style="color:var(--text-dim);margin-right:6px">params</span>${esc(m.params)}`;
@@ -338,7 +350,8 @@ function parsePython(code) {
         // class
         const cm = trimmed.match(/^class\s+(\w+)(?:\s*\(([^)]*)\))?\s*:/);
         if (cm) {
-            items.push({ kind:'class', name: cm[1], bases: (cm[2]||'').trim(), indent, lineStart: i+1 });
+            items.push({ kind:'class', name: cm[1], bases: (cm[2]||'').trim(), indent, lineStart: i+1,
+                description: pyDocstring(lines, i) });
             continue;
         }
 
@@ -349,6 +362,7 @@ function parsePython(code) {
                 kind:'def', name: dm[1],
                 params: clean(dm[2]),
                 returnType: dm[3] ? dm[3].trim() : null,
+                description: pyDocstring(lines, i),
                 indent, lineStart: i+1
             });
         }
@@ -407,14 +421,14 @@ function parseJS(code) {
 
         // function declaration
         const fd = t.match(/^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/);
-        if (fd) { fns.push({ type:'function', name:fd[1], params:clean(fd[2]), lineStart:i+1, lineEnd:braceEnd(lines,i) }); continue; }
+        if (fd) { fns.push({ type:'function', name:fd[1], params:clean(fd[2]), lineStart:i+1, lineEnd:braceEnd(lines,i), description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) }); continue; }
 
         // arrow function / function expression
         const ae = t.match(/^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(?([^)=>{]*)\)?\s*=>/);
-        if (ae) { fns.push({ type:'function', name:ae[1], params:clean(ae[2]), lineStart:i+1, lineEnd:braceEnd(lines,i) }); continue; }
+        if (ae) { fns.push({ type:'function', name:ae[1], params:clean(ae[2]), lineStart:i+1, lineEnd:braceEnd(lines,i), description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) }); continue; }
 
         const fe = t.match(/^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function\s*\(([^)]*)\)/);
-        if (fe) { fns.push({ type:'function', name:fe[1], params:clean(fe[2]), lineStart:i+1, lineEnd:braceEnd(lines,i) }); }
+        if (fe) { fns.push({ type:'function', name:fe[1], params:clean(fe[2]), lineStart:i+1, lineEnd:braceEnd(lines,i), description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) }); }
     }
 
     return { classes, functions: fns };
@@ -437,7 +451,8 @@ function parseJSMethods(lines, clsStart, clsEnd, methods) {
         const mm = t.match(/^(?:(?:async|static|get|set)\s+)?(\w+)\s*\(([^)]*)\)\s*\{/);
         if (mm && !['if','for','while','switch','try','catch','else'].includes(mm[1])) {
             const lineEnd = braceEnd(lines, i);
-            methods.push({ type:'method', name:mm[1], params:clean(mm[2]), lineStart:i+1, lineEnd });
+            methods.push({ type:'method', name:mm[1], params:clean(mm[2]), lineStart:i+1, lineEnd,
+                description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
             i = lineEnd - 1;
             depth = 1;
         }
@@ -482,7 +497,8 @@ function parseJavaMethods(lines, clsStart, clsEnd, methods) {
         const mm = t.match(/^(?:(?:public|private|protected|static|final|abstract|synchronized|default|native)\s+)*(?:<[^>]+>\s+)?(\w[\w<>\[\]]*)\s+(\w+)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*\{/);
         if (mm && !['if','for','while','switch','try'].includes(mm[2])) {
             const lineEnd = braceEnd(lines, i);
-            methods.push({ type:'method', name:mm[2], params:clean(mm[3]), returnType:mm[1], lineStart:i+1, lineEnd });
+            methods.push({ type:'method', name:mm[2], params:clean(mm[3]), returnType:mm[1], lineStart:i+1, lineEnd,
+                description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
             i = lineEnd - 1;
             depth = 1;
         }
@@ -520,7 +536,8 @@ function parseCLike(code, isCpp) {
         const fm = t.match(/^(?:static\s+|inline\s+|extern\s+)?(\w[\w\s*]*?)\s+(\w+)\s*\(([^)]*)\)\s*(?:const\s*)?\{/);
         if (fm && fm[2] && !['if','for','while','switch','do','else','return'].includes(fm[2]) && fm[1] !== 'else') {
             const lineEnd = braceEnd(lines, i);
-            fns.push({ type:'function', name:fm[2], params:clean(fm[3]), returnType:fm[1].trim(), lineStart:i+1, lineEnd });
+            fns.push({ type:'function', name:fm[2], params:clean(fm[3]), returnType:fm[1].trim(), lineStart:i+1, lineEnd,
+                description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
             i = lineEnd - 1;
         }
     }
@@ -543,11 +560,74 @@ function parseCppMethods(lines, clsStart, clsEnd, methods) {
         const mm = t.match(/^(?:(?:virtual|static|inline|explicit|const|override)\s+)*(?:\w[\w\s*]*?)\s+(\w+)\s*\(([^)]*)\)\s*(?:const\s*)?\{/);
         if (mm && !['if','for','while','switch','do'].includes(mm[1])) {
             const lineEnd = braceEnd(lines, i);
-            methods.push({ type:'method', name:mm[1], params:clean(mm[2]), lineStart:i+1, lineEnd });
+            methods.push({ type:'method', name:mm[1], params:clean(mm[2]), lineStart:i+1, lineEnd,
+                description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
             i = lineEnd - 1;
             depth = 1;
         }
     }
+}
+
+// ─── Comment / Docstring Extraction ──────────────────────────────────────────
+
+// Python: extract triple-quoted docstring on line after def/class
+function pyDocstring(lines, defLineIdx) {
+    for (let i = defLineIdx + 1; i < Math.min(defLineIdx + 8, lines.length); i++) {
+        const t = lines[i].trim();
+        if (!t) continue;
+        const q = t.startsWith('"""') ? '"""' : t.startsWith("'''") ? "'''" : null;
+        if (!q) break;
+        const after = t.slice(3);
+        const end   = after.indexOf(q);
+        if (end >= 0) return after.slice(0, end).trim() || null; // single-line
+        // multi-line: collect until closing quotes
+        let doc = after;
+        for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+            const jt = lines[j].trim();
+            const e  = jt.indexOf(q);
+            if (e >= 0) { doc += ' ' + jt.slice(0, e); return doc.trim() || null; }
+            doc += ' ' + jt;
+        }
+        return doc.trim() || null;
+    }
+    return null;
+}
+
+// Any language: collect // line comments immediately BEFORE the given 0-based line index
+function lineCommentsBefore(lines, idx) {
+    const parts = [];
+    for (let i = idx - 1; i >= Math.max(0, idx - 8); i--) {
+        const t = lines[i].trim();
+        if (t.startsWith('//')) parts.unshift(t.slice(2).trim());
+        else if (t === '') continue;
+        else break;
+    }
+    return parts.length ? parts.join(' ') : null;
+}
+
+// Any language: extract /** ... */ or /* ... */ block comment ending just before idx
+function blockCommentBefore(lines, idx) {
+    let end = idx - 1;
+    while (end >= 0 && !lines[end].trim()) end--;
+    if (end < 0) return null;
+    const endT = lines[end].trim();
+    if (!endT.endsWith('*/')) return null;
+    let start = end;
+    while (start >= 0 && !lines[start].trim().startsWith('/*')) start--;
+    if (start < 0) return null;
+    const parts = [];
+    for (let i = start; i <= end; i++) {
+        const t = lines[i].trim()
+            .replace(/^\/\*+\s*/, '').replace(/\*+\/$/, '').replace(/^\*+\s?/, '').trim();
+        if (t) parts.push(t);
+    }
+    return parts.join(' ').trim() || null;
+}
+
+function extractDescription(lines, lineIdx, ext) {
+    const i = lineIdx - 1; // convert 1-based to 0-based
+    if (ext === 'py') return pyDocstring(lines, i);
+    return blockCommentBefore(lines, i) || lineCommentsBefore(lines, i);
 }
 
 // ─── Parser Helpers ───────────────────────────────────────────────────────────
