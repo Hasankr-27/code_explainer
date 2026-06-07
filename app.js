@@ -438,7 +438,7 @@ function parseJSMethods(lines, clsStart, clsEnd, methods) {
         if (mm && !['if','for','while','switch','try','catch','else'].includes(mm[1])) {
             const lineEnd = braceEnd(lines, i);
             methods.push({ type:'method', name:mm[1], params:clean(mm[2]), lineStart:i+1, lineEnd });
-            i = lineEnd - 2;
+            i = lineEnd - 1;
             depth = 1;
         }
     }
@@ -483,7 +483,7 @@ function parseJavaMethods(lines, clsStart, clsEnd, methods) {
         if (mm && !['if','for','while','switch','try'].includes(mm[2])) {
             const lineEnd = braceEnd(lines, i);
             methods.push({ type:'method', name:mm[2], params:clean(mm[3]), returnType:mm[1], lineStart:i+1, lineEnd });
-            i = lineEnd - 2;
+            i = lineEnd - 1;
             depth = 1;
         }
     }
@@ -508,7 +508,7 @@ function parseCLike(code, isCpp) {
                 const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[] };
                 parseCppMethods(lines, i, lineEnd, cls.methods);
                 classes.push(cls);
-                i = lineEnd - 2;
+                i = lineEnd - 1;
                 continue;
             }
         }
@@ -521,7 +521,7 @@ function parseCLike(code, isCpp) {
         if (fm && fm[2] && !['if','for','while','switch','do','else','return'].includes(fm[2]) && fm[1] !== 'else') {
             const lineEnd = braceEnd(lines, i);
             fns.push({ type:'function', name:fm[2], params:clean(fm[3]), returnType:fm[1].trim(), lineStart:i+1, lineEnd });
-            i = lineEnd - 2;
+            i = lineEnd - 1;
         }
     }
 
@@ -544,7 +544,7 @@ function parseCppMethods(lines, clsStart, clsEnd, methods) {
         if (mm && !['if','for','while','switch','do'].includes(mm[1])) {
             const lineEnd = braceEnd(lines, i);
             methods.push({ type:'method', name:mm[1], params:clean(mm[2]), lineStart:i+1, lineEnd });
-            i = lineEnd - 2;
+            i = lineEnd - 1;
             depth = 1;
         }
     }
