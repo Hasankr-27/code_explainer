@@ -1,10 +1,10 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_SIZE  = 50 * 1024;
-const SUPPORTED = ['.py', '.js', '.ts', '.tsx', '.java', '.c'];
+const SUPPORTED = ['.py', '.js', '.java'];
 
-const LANG_COLOR = { py:'#3572A5', js:'#c9a800', ts:'#3178c6', java:'#B07219', c:'#555' };
-const HLJS_LANG  = { py:'python', js:'javascript', ts:'typescript', tsx:'typescript', java:'java', c:'c' };
+const LANG_COLOR = { py:'#3572A5', js:'#c9a800', java:'#B07219' };
+const HLJS_LANG  = { py:'python', js:'javascript', java:'java' };
 
 // ─── Translations ─────────────────────────────────────────────────────────────
 
@@ -13,9 +13,9 @@ const TRANSLATIONS = {
         files:'FILES', source:'SOURCE',
         tabStruct:'Structure', tabRel:'Relations', tabDiag:'Diagram',
         dropMain:'Drop files here', dropOr:'or', browse:'browse',
-        dropHint:'.py .js .ts .java .c · max 50 KB',
+        dropHint:'.py .js .java · max 50 KB',
         emptyMain:'Upload a source file to explore its structure',
-        emptyHint:'Supports Python, JavaScript, TypeScript, Java, C',
+        emptyHint:'Supports Python, JavaScript, Java',
         noClasses:'No classes or functions detected in this file.',
         noMethods:'No methods detected', viewCode:'View Code', view:'View',
         extends:'extends', implements:'implements', creates:'new →', subclass:'↳ subclass',
@@ -25,7 +25,7 @@ const TRANSLATIONS = {
         typeAbstract:'abstract', typeInterface:'interface', typeConcrete:'class',
         noRel:'No classes found to analyze.',
         noDiag:'Upload a file to generate the diagram.',
-        errUnsupported:'is not a supported file type. Use .py .js .ts .java .c',
+        errUnsupported:'is not a supported file type. Use .py .js .java',
         errTooBig:'exceeds the 50 KB limit',
         imports:'IMPORTS', importsCount:'imports',
         fieldsSect:'FIELDS', methods:'METHODS', noFields:'No fields',
@@ -35,9 +35,9 @@ const TRANSLATIONS = {
         files:'DOSYALAR', source:'KAYNAK',
         tabStruct:'Yapı', tabRel:'İlişkiler', tabDiag:'Diyagram',
         dropMain:'Dosyaları buraya bırakın', dropOr:'veya', browse:'gözat',
-        dropHint:'.py .js .ts .java .c · maks 50 KB',
+        dropHint:'.py .js .java · maks 50 KB',
         emptyMain:'Yapıyı keşfetmek için bir kaynak dosyası yükleyin',
-        emptyHint:'Python, JavaScript, TypeScript, Java, C desteklenir',
+        emptyHint:'Python, JavaScript, Java desteklenir',
         noClasses:'Bu dosyada sınıf veya fonksiyon bulunamadı.',
         noMethods:'Metot bulunamadı', viewCode:'Kodu Gör', view:'Gör',
         extends:'genişletir', implements:'uygular', creates:'yeni →', subclass:'↳ alt sınıf',
@@ -47,7 +47,7 @@ const TRANSLATIONS = {
         typeAbstract:'soyut', typeInterface:'arayüz', typeConcrete:'sınıf',
         noRel:'Analiz edilecek sınıf bulunamadı.',
         noDiag:'Diyagram oluşturmak için dosya yükleyin.',
-        errUnsupported:'desteklenmeyen dosya türü. .py .js .ts .java .c kullanın',
+        errUnsupported:'desteklenmeyen dosya türü. .py .js .java kullanın',
         errTooBig:'50 KB sınırını aşıyor',
         imports:'İÇE AKTARMALAR', importsCount:'içe aktarma',
         fieldsSect:'ALANLAR', methods:'METODLAR', noFields:'Alan yok',
@@ -1290,19 +1290,11 @@ function svgEl(tag) {
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 
 function parseCode(code, ext) {
-    try {
-        switch (ext) {
-            case 'py':   return parsePython(code);
-            case 'js':   return parseJS(code);
-            case 'ts':
-            case 'tsx':  return parseTS(code);
-            case 'java': return parseJava(code);
-            case 'c':    return parseCLike(code);
-            default:     return { classes: [], functions: [], imports: [] };
-        }
-    } catch (err) {
-        console.error('parseCode error:', err);
-        return { classes: [], functions: [], imports: [] };
+    switch (ext) {
+        case 'py':   return parsePython(code);
+        case 'js':   return parseJS(code);
+        case 'java': return parseJava(code);
+        default:     return { classes: [], functions: [], imports: [] };
     }
 }
 
