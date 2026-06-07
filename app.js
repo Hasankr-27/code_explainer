@@ -28,7 +28,7 @@ const TRANSLATIONS = {
         errUnsupported:'is not a supported file type. Use .py .js .java .c .cpp',
         errTooBig:'exceeds the 50 KB limit',
         imports:'IMPORTS', importsCount:'imports',
-        fieldsSect:'FIELDS', noFields:'No fields'
+        fieldsSect:'FIELDS', methods:'METHODS', noFields:'No fields'
     },
     tr: {
         files:'DOSYALAR', source:'KAYNAK',
@@ -49,7 +49,7 @@ const TRANSLATIONS = {
         errUnsupported:'desteklenmeyen dosya türü. .py .js .java .c .cpp kullanın',
         errTooBig:'50 KB sınırını aşıyor',
         imports:'İÇE AKTARMALAR', importsCount:'içe aktarma',
-        fieldsSect:'ALANLAR', noFields:'Alan yok'
+        fieldsSect:'ALANLAR', methods:'METODLAR', noFields:'Alan yok'
     }
 };
 
@@ -269,22 +269,39 @@ function renderStructure(f) {
     structureBody.innerHTML = '';
     const { classes, functions, imports } = f.parsed;
 
-    // Imports section (always first, collapsed by default)
+    // Imports section — wrapped for padding, outside the grid
     if (imports && imports.length) {
+        const wrapper = mk('div', 'imports-wrapper');
         const imp = buildImportsSection(imports);
-        if (imp) structureBody.appendChild(imp);
+        if (imp) { wrapper.appendChild(imp); structureBody.appendChild(wrapper); }
     }
 
     if (!classes.length && !functions.length) {
         const msg = mk('div', 'empty-state');
-        msg.style.flex = '0';
-        msg.innerHTML = `<p style="margin-top:20px">${t('noClasses')}</p>`;
+        msg.innerHTML = `<p>${t('noClasses')}</p>`;
         structureBody.appendChild(msg);
         return;
     }
 
-    classes.forEach(cls  => structureBody.appendChild(buildClassCard(cls)));
-    functions.forEach(fn => structureBody.appendChild(buildFnCard(fn)));
+    const classType = detectClassTypes(f.content, classes);
+    const grid = mk('div', 'struct-grid');
+    classes.forEach(cls  => grid.appendChild(buildClassCard(cls, classType[cls.name] || 'concrete')));
+    functions.forEach(fn => grid.appendChild(buildFnCard(fn)));
+    structureBody.appendChild(grid);
+}
+
+function detectClassTypes(content, classes) {
+    const lines = content.split('\n');
+    const classType = {};
+    for (const line of lines) {
+        const tr = line.trim();
+        let m;
+        if ((m = tr.match(/(?:^|\s)abstract\s+class\s+(\w+)/)))  classType[m[1]] = 'abstract';
+        if ((m = tr.match(/(?:^|\s)interface\s+(\w+)/)))          classType[m[1]] = 'interface';
+        if ((m = tr.match(/(?:^|\s)enum\s+(\w+)/)))               classType[m[1]] = 'enum';
+    }
+    classes.forEach(c => { if (!classType[c.name]) classType[c.name] = 'concrete'; });
+    return classType;
 }
 
 /* Imports collapsible section */
@@ -324,55 +341,86 @@ function buildImportsSection(imports) {
     return section;
 }
 
-/* Class card */
-function buildClassCard(cls) {
-    const card = mk('div', 's-card cls');
-    let collapsed = false;
+/* Class card — accordion, collapsed by default */
+function buildClassCard(cls, type) {
+    const card = mk('div', `s-card s-card-${type}`);
 
-    const hdr = mk('div', 'c-hdr');
-    hdr.innerHTML = `
-        <span class="chevron">▾</span>
-        <span class="badge badge-cls">class</span>
-        <span class="c-name" title="${esc(cls.name)}">${esc(cls.name)}</span>
-        <span class="c-line">L${cls.lineStart}</span>
-        <button class="view-btn">${t('viewCode')}</button>
-    `;
-    hdr.querySelector('.view-btn').addEventListener('click', e => {
+    // ── Header ──
+    const hdr = mk('div', 's-card-hdr');
+
+    const chevron = mk('span', 'chevron');
+    chevron.textContent = '▾';
+    chevron.style.transform = 'rotate(-90deg)';
+    chevron.style.transition = 'transform .22s ease';
+
+    const typeBadge = mk('span', `badge badge-type-${type}`);
+    typeBadge.textContent = type.toUpperCase();
+
+    const nameEl = mk('span', 'sc-name');
+    nameEl.textContent = cls.name;
+    nameEl.title = cls.name;
+
+    const lineEl = mk('span', 'c-line');
+    lineEl.textContent = `L${cls.lineStart}`;
+
+    const viewBtn = mk('button', 'view-btn');
+    viewBtn.textContent = t('viewCode');
+    viewBtn.addEventListener('click', e => {
         e.stopPropagation();
         highlightLines(cls.lineStart, cls.lineEnd);
     });
-    hdr.addEventListener('click', e => {
-        if (e.target.classList.contains('view-btn')) return;
-        collapsed = !collapsed;
-        card.classList.toggle('collapsed', collapsed);
-        body.style.display = collapsed ? 'none' : '';
-    });
 
-    const body = mk('div', 'c-body');
+    hdr.append(chevron, typeBadge, nameEl, lineEl, viewBtn);
+    card.appendChild(hdr);
+
+    // ── Expandable body ──
+    const body = mk('div', 's-card-body');
 
     if (cls.bases) {
         const extRow = mk('div', 'extends-row');
+        extRow.style.padding = '4px 14px 2px';
         extRow.innerHTML = `<span class="lbl">${t('extends')}</span><span class="val">${esc(cls.bases)}</span>`;
         body.appendChild(extRow);
     }
 
-    // Fields section
+    // Fields sub-section
     if (cls.fields && cls.fields.length) {
-        body.appendChild(buildFieldsSection(cls.fields));
+        const fHdr = mk('div', 'card-section-hdr');
+        fHdr.textContent = t('fieldsSect');
+        body.appendChild(fHdr);
+        const fs = buildFieldsSection(cls.fields);
+        fs.style.margin = '0 10px 4px';
+        body.appendChild(fs);
     }
 
-    // Methods section
+    // Methods sub-section
+    const mHdr = mk('div', 'card-section-hdr');
+    mHdr.textContent = t('methods');
+    body.appendChild(mHdr);
+
     if (cls.methods.length) {
         const list = mk('div', 'methods-list');
+        list.style.margin = '0 10px 10px';
         cls.methods.forEach(m => list.appendChild(buildMethodCard(m)));
         body.appendChild(list);
     } else {
         const nm = mk('div', 'no-methods');
+        nm.style.padding = '4px 14px 10px';
         nm.textContent = t('noMethods');
         body.appendChild(nm);
     }
 
-    card.append(hdr, body);
+    card.appendChild(body);
+
+    // Toggle on header click
+    hdr.addEventListener('click', e => {
+        if (e.target.classList.contains('view-btn')) return;
+        const opening = !body.classList.contains('expanded');
+        body.classList.toggle('expanded', opening);
+        card.classList.toggle('open', opening);
+        chevron.style.transform = opening ? '' : 'rotate(-90deg)';
+    });
+
     return card;
 }
 
@@ -419,38 +467,66 @@ function buildFieldsSection(fields) {
     return section;
 }
 
-/* Standalone function card */
+/* Standalone function card — accordion, collapsed by default */
 function buildFnCard(fn) {
-    const card = mk('div', 's-card fn');
+    const card = mk('div', 's-card s-card-fn');
 
-    const hdr = mk('div', 'c-hdr');
-    hdr.innerHTML = `
-        <span class="badge badge-fn">fn</span>
-        <span class="c-name" title="${esc(fn.name)}">${esc(fn.name)}</span>
-        ${fn.returnType ? `<span class="ret-badge">${esc(fn.returnType)}</span>` : ''}
-        <span class="c-line">L${fn.lineStart}</span>
-        <button class="view-btn">${t('viewCode')}</button>
-    `;
-    hdr.querySelector('.view-btn').addEventListener('click', e => {
+    const hdr = mk('div', 's-card-hdr');
+
+    const chevron = mk('span', 'chevron');
+    chevron.textContent = '▾';
+    chevron.style.transform = 'rotate(-90deg)';
+    chevron.style.transition = 'transform .22s ease';
+
+    const badge = mk('span', 'badge badge-type-fn');
+    badge.textContent = 'FN';
+
+    const nameEl = mk('span', 'sc-name');
+    nameEl.textContent = fn.name;
+    nameEl.title = fn.name;
+
+    const lineEl = mk('span', 'c-line');
+    lineEl.textContent = `L${fn.lineStart}`;
+
+    const viewBtn = mk('button', 'view-btn');
+    viewBtn.textContent = t('viewCode');
+    viewBtn.addEventListener('click', e => {
         e.stopPropagation();
         highlightLines(fn.lineStart, fn.lineEnd);
     });
 
+    hdr.append(chevron, badge, nameEl);
+    if (fn.returnType) {
+        const ret = mk('span', 'ret-badge');
+        ret.textContent = fn.returnType;
+        hdr.appendChild(ret);
+    }
+    hdr.append(lineEl, viewBtn);
     card.appendChild(hdr);
 
     if (fn.params || fn.description) {
-        const body = mk('div', 'c-body');
+        const body = mk('div', 's-card-body');
         if (fn.description) {
             const d = mk('div', 'c-desc');
+            d.style.padding = '8px 14px';
             d.textContent = fn.description;
             body.appendChild(d);
         }
         if (fn.params) {
             const p = mk('div', 'c-params');
+            p.style.padding = '4px 14px 10px';
             p.innerHTML = `<span class="lbl">${t('params')}</span>${esc(fn.params)}`;
             body.appendChild(p);
         }
         card.appendChild(body);
+
+        hdr.addEventListener('click', e => {
+            if (e.target.classList.contains('view-btn')) return;
+            const opening = !body.classList.contains('expanded');
+            body.classList.toggle('expanded', opening);
+            card.classList.toggle('open', opening);
+            chevron.style.transform = opening ? '' : 'rotate(-90deg)';
+        });
     }
 
     return card;

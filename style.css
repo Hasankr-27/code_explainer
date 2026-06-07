@@ -270,7 +270,13 @@ body {
 .r-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 
 .panel-body {
-    flex: 1; overflow-y: auto; padding: 12px 14px;
+    flex: 1; overflow-y: auto; padding: 0;
+    display: flex; flex-direction: column;
+}
+
+/* Non-structure tabs keep padding and flex-column */
+#relations-body {
+    padding: 12px 14px;
     display: flex; flex-direction: column; gap: 8px;
 }
 .panel-body::-webkit-scrollbar { width: 5px; }
@@ -286,18 +292,96 @@ body {
 .empty-state p   { font-size: 12.5px; color: var(--text-muted); }
 .empty-state span { font-size: 11px; }
 
+/* ─── Structure Grid ──────────────────────────────────────────────────────── */
+
+.struct-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 10px;
+    padding: 12px 14px;
+    align-content: start;
+    width: 100%;
+}
+
 /* ─── Structure Cards ─────────────────────────────────────────────────────── */
 
 .s-card {
-    border-radius: var(--r);
+    border-radius: 12px;
     border: 1px solid var(--border-dim);
     border-left: 3px solid transparent;
     background: var(--panel);
-    overflow: hidden;
+    /* no overflow:hidden — let body animate freely */
+    transition: box-shadow .18s;
 }
-.s-card.cls  { border-left-color: var(--class-color); }
-.s-card.fn   { border-left-color: var(--fn-color); }
+.s-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,.3); }
 
+/* Type-based left border accent */
+.s-card-concrete  { border-left-color: var(--class-color); }
+.s-card-abstract  { border-left-color: var(--abs-color); }
+.s-card-interface { border-left-color: var(--iface-color); }
+.s-card-enum      { border-left-color: var(--enum-color); }
+.s-card-fn        { border-left-color: var(--fn-color); }
+
+/* Card header */
+.s-card-hdr {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 14px; cursor: pointer; min-height: 72px;
+    user-select: none; border-radius: 12px;
+    transition: background .12s;
+}
+.s-card-hdr:hover { background: rgba(255,255,255,.03); }
+
+/* Expanded state: top corners stay rounded, bottom straight */
+.s-card.open > .s-card-hdr {
+    border-radius: 12px 12px 0 0;
+}
+
+/* Type badge inside card header */
+.badge-type-concrete  { background: rgba(78,201,176,.12);  color: var(--class-color); }
+.badge-type-abstract  { background: rgba(249,115,22,.12);  color: var(--abs-color); }
+.badge-type-interface { background: rgba(86,156,214,.12);  color: var(--iface-color); }
+.badge-type-enum      { background: rgba(197,134,192,.12); color: var(--enum-color); }
+.badge-type-fn        { background: rgba(220,220,170,.10); color: var(--fn-color); }
+
+/* Class name inside card */
+.s-card-concrete  .sc-name { color: var(--class-color); }
+.s-card-abstract  .sc-name { color: var(--abs-color); }
+.s-card-interface .sc-name { color: var(--iface-color); }
+.s-card-enum      .sc-name { color: var(--enum-color); }
+.s-card-fn        .sc-name { color: var(--fn-color); }
+
+.sc-name {
+    font-family: var(--font-code); font-size: 16px; font-weight: 700;
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Expandable body */
+.s-card-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.28s ease;
+    border-top: 0px solid var(--border-dim);
+}
+.s-card-body.expanded {
+    max-height: 4000px;
+    border-top-width: 1px;
+}
+
+/* Sub-headers inside card body (FIELDS / METHODS) */
+.card-section-hdr {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--text-dim);
+    padding: 7px 12px 5px;
+    display: flex; align-items: center; gap: 6px;
+    user-select: none;
+}
+.card-section-hdr::before {
+    content: ''; display: inline-block;
+    width: 3px; height: 9px; border-radius: 2px;
+    background: currentColor; opacity: .5;
+}
+
+/* Legacy .c-hdr kept for any remaining use */
 .c-hdr {
     display: flex; align-items: center; gap: 7px;
     padding: 10px 12px; cursor: pointer; min-height: 46px;
@@ -322,11 +406,10 @@ body {
 .badge-method { background: rgba(156,220,254,.08); color: var(--method-color); }
 
 .c-name {
-    font-family: var(--font-code); font-size: 14px; font-weight: 600;
+    font-family: var(--font-code); font-size: 13px; font-weight: 600;
     flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text);
 }
-.cls .c-name { color: var(--class-color); font-size: 18px; }
-.fn  .c-name { color: var(--fn-color); }
 
 .c-line { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
 .ret-badge {
@@ -598,6 +681,11 @@ body {
 .f-tag.final-tag  { background: rgba(249,115,22,.10);  color: var(--abs-color); }
 
 /* ─── Imports Section ─────────────────────────────────────────────────────── */
+
+.imports-wrapper {
+    padding: 12px 14px 0;
+    flex-shrink: 0;
+}
 
 .imports-section {
     border-radius: var(--r);
