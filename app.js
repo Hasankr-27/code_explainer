@@ -421,12 +421,15 @@ function buildClassCard(cls, type) {
 
     card.appendChild(body);
 
-    // Toggle on header click — card.open is the single source of truth
+    // Each card has its own closure-local state — completely isolated
+    let cardOpen = false;
     hdr.addEventListener('click', e => {
         if (e.target.classList.contains('view-btn')) return;
-        const opening = !card.classList.contains('open');
-        card.classList.toggle('open', opening);
-        chevron.style.transform = opening ? '' : 'rotate(-90deg)';
+        cardOpen = !cardOpen;
+        body.style.maxHeight  = cardOpen ? '4000px' : '0px';
+        body.style.borderTopWidth = cardOpen ? '1px' : '0px';
+        card.classList.toggle('open', cardOpen);
+        chevron.style.transform = cardOpen ? '' : 'rotate(-90deg)';
     });
 
     return card;
@@ -528,11 +531,14 @@ function buildFnCard(fn) {
         }
         card.appendChild(body);
 
+        let fnOpen = false;
         hdr.addEventListener('click', e => {
             if (e.target.classList.contains('view-btn')) return;
-            const opening = !card.classList.contains('open');
-            card.classList.toggle('open', opening);
-            chevron.style.transform = opening ? '' : 'rotate(-90deg)';
+            fnOpen = !fnOpen;
+            body.style.maxHeight  = fnOpen ? '4000px' : '0px';
+            body.style.borderTopWidth = fnOpen ? '1px' : '0px';
+            card.classList.toggle('open', fnOpen);
+            chevron.style.transform = fnOpen ? '' : 'rotate(-90deg)';
         });
     }
 
@@ -636,12 +642,12 @@ function extractNewCalls(lines, startLine, endLine, classNames, ext) {
                 results.push({ className: m[1], varName: m[2], varType: 'struct ' + m[1], line: lineNum });
             }
         } else {
-            // Java / JS / TS: find every `new ClassName(` on this line
+            // Java / JS / TS: find every `new ClassName(` on this line — no filter,
+            // show all instantiations including external/library classes
             const newRe = /\bnew\s+(\w+)\s*[(<]/g;
             let nm;
             while ((nm = newRe.exec(raw)) !== null) {
                 const className = nm[1];
-                if (!classNames.has(className)) continue;
 
                 let varName = null, varType = null;
                 if (ext === 'java') {
@@ -697,13 +703,14 @@ function analyzeRelations(code, classes, ext) {
         if (created.size) instantiation[cls.name] = [...created];
     });
 
-    // Per-method: extract rich new-call data and store directly on method objects
+    // Per-method: extract all new-calls for Structure tab; filter to known classes for Relations
     const methodCreates = {};
     classes.forEach(cls => {
         cls.methods.forEach(method => {
             const calls = extractNewCalls(lines, method.lineStart, method.lineEnd, classNames, ext);
-            method.newCalls = calls;   // attach to method for Structure tab
-            if (calls.length) methodCreates[`${cls.name}.${method.name}`] = calls;
+            method.newCalls = calls;   // ALL calls → Structure tab Object Creations
+            const relCalls = calls.filter(c => classNames.has(c.className));
+            if (relCalls.length) methodCreates[`${cls.name}.${method.name}`] = relCalls;
         });
     });
 

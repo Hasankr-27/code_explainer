@@ -362,12 +362,9 @@ body {
 .s-card-body {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.28s ease;
+    transition: max-height 0.28s ease, border-top-width 0s;
     border-top: 0px solid var(--border-dim);
-}
-.s-card.open > .s-card-body {
-    max-height: 4000px;
-    border-top-width: 1px;
+    /* open/close driven by inline style from JS — no CSS class needed */
 }
 
 /* Sub-headers inside card body (FIELDS / METHODS) */
