@@ -26,7 +26,9 @@ const TRANSLATIONS = {
         noRel:'No classes found to analyze.',
         noDiag:'Upload a file to generate the diagram.',
         errUnsupported:'is not a supported file type. Use .py .js .java .c .cpp',
-        errTooBig:'exceeds the 50 KB limit'
+        errTooBig:'exceeds the 50 KB limit',
+        imports:'IMPORTS', importsCount:'imports',
+        fieldsSect:'FIELDS', noFields:'No fields'
     },
     tr: {
         files:'DOSYALAR', source:'KAYNAK',
@@ -45,7 +47,9 @@ const TRANSLATIONS = {
         noRel:'Analiz edilecek sınıf bulunamadı.',
         noDiag:'Diyagram oluşturmak için dosya yükleyin.',
         errUnsupported:'desteklenmeyen dosya türü. .py .js .java .c .cpp kullanın',
-        errTooBig:'50 KB sınırını aşıyor'
+        errTooBig:'50 KB sınırını aşıyor',
+        imports:'İÇE AKTARMALAR', importsCount:'içe aktarma',
+        fieldsSect:'ALANLAR', noFields:'Alan yok'
     }
 };
 
@@ -62,7 +66,7 @@ function switchLang(newLang) {
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-let files     = [];    // Array of {name, size, ext, content, parsed}
+let files     = [];
 let activeIdx = null;
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -238,7 +242,7 @@ function highlightLines(lineStart, lineEnd) {
     if (lineStart == null) return;
 
     const lh = lineHeight();
-    const pad = 8; // .code-pre top padding
+    const pad = 8;
 
     const band = mk('div', 'hl-band');
     band.style.top    = (pad + (lineStart - 1) * lh) + 'px';
@@ -263,7 +267,13 @@ function lineHeight() {
 
 function renderStructure(f) {
     structureBody.innerHTML = '';
-    const { classes, functions } = f.parsed;
+    const { classes, functions, imports } = f.parsed;
+
+    // Imports section (always first, collapsed by default)
+    if (imports && imports.length) {
+        const imp = buildImportsSection(imports);
+        if (imp) structureBody.appendChild(imp);
+    }
 
     if (!classes.length && !functions.length) {
         const msg = mk('div', 'empty-state');
@@ -275,6 +285,43 @@ function renderStructure(f) {
 
     classes.forEach(cls  => structureBody.appendChild(buildClassCard(cls)));
     functions.forEach(fn => structureBody.appendChild(buildFnCard(fn)));
+}
+
+/* Imports collapsible section */
+function buildImportsSection(imports) {
+    const section = mk('div', 'imports-section');
+    let expanded = false;
+
+    const hdr = mk('div', 'imports-hdr');
+    const chevron = mk('span', 'chevron');
+    chevron.textContent = '▾';
+    chevron.style.transform = 'rotate(-90deg)';
+
+    const badge = mk('span', 'badge');
+    badge.style.cssText = 'background:rgba(100,100,100,.15);color:#888;border-radius:20px;font-size:9px;padding:2px 7px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;';
+    badge.textContent = t('imports');
+
+    const count = mk('span', 'imports-count');
+    count.textContent = `${imports.length} ${t('importsCount')}`;
+
+    hdr.append(chevron, badge, count);
+
+    const body = mk('div', 'imports-body hidden');
+    imports.forEach(imp => {
+        const chip = mk('span', 'import-chip');
+        chip.textContent = imp;
+        chip.title = imp;
+        body.appendChild(chip);
+    });
+
+    hdr.addEventListener('click', () => {
+        expanded = !expanded;
+        body.classList.toggle('hidden', !expanded);
+        chevron.style.transform = expanded ? '' : 'rotate(-90deg)';
+    });
+
+    section.append(hdr, body);
+    return section;
 }
 
 /* Class card */
@@ -304,11 +351,17 @@ function buildClassCard(cls) {
     const body = mk('div', 'c-body');
 
     if (cls.bases) {
-        const ext = mk('div', 'extends-row');
-        ext.innerHTML = `<span class="lbl">${t('extends')}</span><span class="val">${esc(cls.bases)}</span>`;
-        body.appendChild(ext);
+        const extRow = mk('div', 'extends-row');
+        extRow.innerHTML = `<span class="lbl">${t('extends')}</span><span class="val">${esc(cls.bases)}</span>`;
+        body.appendChild(extRow);
     }
 
+    // Fields section
+    if (cls.fields && cls.fields.length) {
+        body.appendChild(buildFieldsSection(cls.fields));
+    }
+
+    // Methods section
     if (cls.methods.length) {
         const list = mk('div', 'methods-list');
         cls.methods.forEach(m => list.appendChild(buildMethodCard(m)));
@@ -321,6 +374,49 @@ function buildClassCard(cls) {
 
     card.append(hdr, body);
     return card;
+}
+
+/* Fields section inside class card */
+function buildFieldsSection(fields) {
+    const section = mk('div', 'fields-list');
+    const lbl = mk('div', 'fields-section-label');
+    lbl.textContent = t('fieldsSect');
+    section.appendChild(lbl);
+
+    fields.forEach(field => {
+        const card = mk('div', 'f-card');
+        const row  = mk('div', 'f-row');
+
+        const badge = mk('span', 'badge badge-field');
+        badge.textContent = 'field';
+
+        const name = mk('span', 'f-name');
+        name.textContent = field.name;
+        name.title = field.name;
+
+        row.append(badge, name);
+
+        if (field.type) {
+            const typeEl = mk('span', 'f-type');
+            typeEl.textContent = field.type;
+            typeEl.title = field.type;
+            row.appendChild(typeEl);
+        }
+        if (field.isStatic) {
+            const tag = mk('span', 'f-tag static-tag');
+            tag.textContent = 'static';
+            row.appendChild(tag);
+        }
+        if (field.isFinal) {
+            const tag = mk('span', 'f-tag final-tag');
+            tag.textContent = 'final';
+            row.appendChild(tag);
+        }
+
+        card.appendChild(row);
+        section.appendChild(card);
+    });
+    return section;
 }
 
 /* Standalone function card */
@@ -462,7 +558,6 @@ function renderRelations(f) {
 
     const rel = analyzeRelations(f.content, classes, f.ext);
 
-    // ── Section 1: Class Types ──
     const typeSection = relSection('type', t('secTypes'));
     classes.forEach(cls => {
         const ct  = rel.classType[cls.name] || 'concrete';
@@ -471,47 +566,31 @@ function renderRelations(f) {
 
         const badge = mk('span', 'rel-badge rb-' + ct);
         badge.textContent = ct;
-
         const name = mk('span', 'rel-name');
         name.textContent = cls.name;
-
         const viewBtn = mk('button', 'view-btn');
         viewBtn.textContent = t('view');
-        viewBtn.addEventListener('click', () => {
-            switchTab('struct');
-            highlightLines(cls.lineStart, cls.lineEnd);
-        });
+        viewBtn.addEventListener('click', () => { switchTab('struct'); highlightLines(cls.lineStart, cls.lineEnd); });
 
         hdr.append(badge, name, viewBtn);
         card.appendChild(hdr);
 
         const rows = [];
-
-        if (cls.bases) {
-            rows.push(relRow(t('extends'), [{ text: cls.bases, cls: 'ext' }]));
-        }
-
+        if (cls.bases) rows.push(relRow(t('extends'), [{ text: cls.bases, cls: 'ext' }]));
         const impls = rel.implementsMap[cls.name];
-        if (impls && impls.length) {
-            rows.push(relRow(t('implements'), impls.map(i => ({ text: i, cls: 'impl' }))));
-        }
-
+        if (impls && impls.length) rows.push(relRow(t('implements'), impls.map(i => ({ text: i, cls: 'impl' }))));
         const creates = rel.instantiation[cls.name];
-        if (creates && creates.length) {
-            rows.push(relRow(t('creates'), creates.map(c => ({ text: c, cls: 'new' }))));
-        }
+        if (creates && creates.length) rows.push(relRow(t('creates'), creates.map(c => ({ text: c, cls: 'new' }))));
 
         if (rows.length) {
             const rowsWrap = mk('div', 'rel-rows');
             rows.forEach(r => rowsWrap.appendChild(r));
             card.appendChild(rowsWrap);
         }
-
         typeSection.appendChild(card);
     });
     relationsBody.appendChild(typeSection);
 
-    // ── Section 2: Inheritance Map ──
     const hasInheritance = classes.some(c => c.bases || rel.implementsMap[c.name]);
     if (hasInheritance) {
         const inhSection = relSection('inh', t('secInh'));
@@ -551,7 +630,6 @@ function renderRelations(f) {
         relationsBody.appendChild(inhSection);
     }
 
-    // ── Section 3: Object Instantiation Map ──
     if (Object.keys(rel.instantiation).length) {
         const instSection = relSection('inst', t('secInst'));
         Object.entries(rel.instantiation).forEach(([creator, created]) => {
@@ -587,16 +665,13 @@ function renderRelations(f) {
                     mc.forEach(c => {
                         const tEl = mk('span', 'rel-target new');
                         tEl.textContent = 'new ' + c;
-                        tEl.addEventListener('click', () => {
-                            switchTab('struct'); highlightLines(m.lineStart, m.lineEnd);
-                        });
+                        tEl.addEventListener('click', () => { switchTab('struct'); highlightLines(m.lineStart, m.lineEnd); });
                         targets.appendChild(tEl);
                     });
                     mRow.append(lbl, targets);
                     rowsWrap.appendChild(mRow);
                 }
             });
-
             card.appendChild(rowsWrap);
             instSection.appendChild(card);
         });
@@ -628,7 +703,6 @@ function relRow(label, targets) {
 
 // ─── Diagram Renderer ─────────────────────────────────────────────────────────
 
-// Box positions: {className: {x, y, w, h}}
 let diagPositions = {};
 
 function renderDiagram(f) {
@@ -647,17 +721,17 @@ function renderDiagram(f) {
 
     const rel = analyzeRelations(f.content, classes, f.ext);
 
-    // Box dimensions
-    const BOX_W     = 230;
-    const HDR_H     = 42;
-    const ROW_H     = 20;
-    const MAX_METHS = 8;
-    const PAD_X     = 40;
-    const PAD_Y     = 50;
-    const GAP_X     = 60;
-    const GAP_Y     = 50;
+    const BOX_W      = 270;
+    const HDR_H      = 52;
+    const FIELD_H    = 20;
+    const ROW_H      = 22;
+    const MAX_FIELDS = 5;
+    const MAX_METHS  = 6;
+    const PAD_X      = 44;
+    const PAD_Y      = 54;
+    const GAP_X      = 72;
+    const GAP_Y      = 64;
 
-    // Colors by type
     const TYPE_COLOR = {
         abstract:  '#f97316',
         interface: '#569cd6',
@@ -665,22 +739,44 @@ function renderDiagram(f) {
         concrete:  '#4ec9b0'
     };
 
-    // Compute box heights
+    const shownF = cls => Math.min((cls.fields || []).length, MAX_FIELDS);
+    const shownM = cls => Math.min(cls.methods.length, MAX_METHS);
     const boxH = cls => {
-        const shown = Math.min(cls.methods.length, MAX_METHS);
-        return HDR_H + shown * ROW_H + (shown ? 6 : 0);
+        const sf = shownF(cls);
+        const sm = shownM(cls);
+        let h = HDR_H;
+        if (sf > 0) h += 6 + sf * FIELD_H + 6;
+        if (sf > 0 && sm > 0) h += 2; // dashed divider
+        if (sm > 0) h += 6 + sm * ROW_H + 6;
+        if (sf === 0 && sm === 0) h += 10;
+        return h;
     };
 
-    // Grid layout
+    // Pre-compute heights
+    const heights = {};
+    classes.forEach(cls => { heights[cls.name] = boxH(cls); });
+
+    // Grid layout — compute y per row using actual max heights
     const cols = Math.max(1, Math.ceil(Math.sqrt(classes.length)));
     classes.forEach((cls, idx) => {
         const col = idx % cols;
         const row = Math.floor(idx / cols);
+
+        let yOff = PAD_Y;
+        for (let r = 0; r < row; r++) {
+            let maxH = 0;
+            for (let c = 0; c < cols; c++) {
+                const ci = r * cols + c;
+                if (ci < classes.length) maxH = Math.max(maxH, heights[classes[ci].name]);
+            }
+            yOff += maxH + GAP_Y;
+        }
+
         diagPositions[cls.name] = {
             x: PAD_X + col * (BOX_W + GAP_X),
-            y: PAD_Y + row * (180 + GAP_Y),
+            y: yOff,
             w: BOX_W,
-            h: boxH(cls)
+            h: heights[cls.name]
         };
     });
 
@@ -711,17 +807,16 @@ function renderDiagram(f) {
     mkMarker('mk-new',  '#dcdcaa');
     diagramSvg.appendChild(defs);
 
-    // Arrow layer (drawn first, below boxes)
     const arrowLayer = svgEl('g');
     arrowLayer.setAttribute('id', 'arrow-layer');
     diagramSvg.appendChild(arrowLayer);
 
-    // Box groups
     classes.forEach(cls => {
         const pos   = diagPositions[cls.name];
         const ct    = rel.classType[cls.name] || 'concrete';
         const color = TYPE_COLOR[ct] || '#4ec9b0';
-        const shown = Math.min(cls.methods.length, MAX_METHS);
+        const fields  = (cls.fields || []).slice(0, MAX_FIELDS);
+        const methods = cls.methods.slice(0, MAX_METHS);
 
         const g = svgEl('g');
         g.setAttribute('class', 'diagram-box-group');
@@ -729,77 +824,78 @@ function renderDiagram(f) {
         g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
         g.style.cursor = 'grab';
 
-        // Box shadow rect
+        // Shadow
         const shadow = svgEl('rect');
         shadow.setAttribute('x', '3'); shadow.setAttribute('y', '3');
         shadow.setAttribute('width', pos.w); shadow.setAttribute('height', pos.h);
-        shadow.setAttribute('rx', '6');
+        shadow.setAttribute('rx', '7');
         shadow.setAttribute('fill', 'rgba(0,0,0,0.35)');
         g.appendChild(shadow);
 
-        // Main box
+        // Main rect
         const rect = svgEl('rect');
         rect.setAttribute('x', '0'); rect.setAttribute('y', '0');
         rect.setAttribute('width', pos.w); rect.setAttribute('height', pos.h);
-        rect.setAttribute('rx', '6');
+        rect.setAttribute('rx', '7');
         rect.setAttribute('fill', '#252526');
         rect.setAttribute('stroke', color);
         rect.setAttribute('stroke-width', '2');
         g.appendChild(rect);
 
-        // Header background
+        // Header bg
         const hdrRect = svgEl('rect');
         hdrRect.setAttribute('x', '0'); hdrRect.setAttribute('y', '0');
         hdrRect.setAttribute('width', pos.w); hdrRect.setAttribute('height', HDR_H);
-        hdrRect.setAttribute('rx', '6');
+        hdrRect.setAttribute('rx', '7');
         hdrRect.setAttribute('fill', color);
-        hdrRect.setAttribute('fill-opacity', '0.18');
+        hdrRect.setAttribute('fill-opacity', '0.16');
         g.appendChild(hdrRect);
 
-        // Left accent
+        // Left accent bar
         const accent = svgEl('rect');
-        accent.setAttribute('x', '0'); accent.setAttribute('y', '6');
-        accent.setAttribute('width', '3');
-        accent.setAttribute('height', HDR_H - 12);
+        accent.setAttribute('x', '0'); accent.setAttribute('y', '8');
+        accent.setAttribute('width', '4');
+        accent.setAttribute('height', HDR_H - 16);
         accent.setAttribute('rx', '2');
         accent.setAttribute('fill', color);
         g.appendChild(accent);
 
         // Type chip
-        const chipW = ct.length * 6 + 10;
+        const chipW = ct.length * 6.5 + 12;
         const chip = svgEl('rect');
-        chip.setAttribute('x', String(pos.w - chipW - 8));
-        chip.setAttribute('y', '10');
+        chip.setAttribute('x', String(pos.w - chipW - 9));
+        chip.setAttribute('y', '12');
         chip.setAttribute('width', String(chipW));
-        chip.setAttribute('height', '16');
-        chip.setAttribute('rx', '8');
+        chip.setAttribute('height', '18');
+        chip.setAttribute('rx', '9');
         chip.setAttribute('fill', color);
-        chip.setAttribute('fill-opacity', '0.3');
+        chip.setAttribute('fill-opacity', '0.28');
         g.appendChild(chip);
 
         const chipText = svgEl('text');
-        chipText.setAttribute('x', String(pos.w - chipW/2 - 8));
-        chipText.setAttribute('y', '22');
+        chipText.setAttribute('x', String(pos.w - chipW / 2 - 9));
+        chipText.setAttribute('y', '25');
         chipText.setAttribute('text-anchor', 'middle');
-        chipText.setAttribute('font-size', '9');
+        chipText.setAttribute('font-size', '9.5');
         chipText.setAttribute('fill', color);
         chipText.setAttribute('font-family', 'Inter, sans-serif');
-        chipText.textContent = ct;
+        chipText.setAttribute('font-weight', '700');
+        chipText.textContent = ct.toUpperCase();
         g.appendChild(chipText);
 
         // Class name
         const nameText = svgEl('text');
-        nameText.setAttribute('x', '12');
-        nameText.setAttribute('y', '26');
-        nameText.setAttribute('font-size', '13');
-        nameText.setAttribute('font-weight', '600');
+        nameText.setAttribute('x', '14');
+        nameText.setAttribute('y', '32');
+        nameText.setAttribute('font-size', '14');
+        nameText.setAttribute('font-weight', '700');
         nameText.setAttribute('fill', '#e0e0e0');
         nameText.setAttribute('font-family', 'Inter, sans-serif');
-        nameText.textContent = cls.name.length > 20 ? cls.name.slice(0,18) + '…' : cls.name;
+        nameText.textContent = cls.name.length > 22 ? cls.name.slice(0, 20) + '…' : cls.name;
         g.appendChild(nameText);
 
-        // Line separator
-        if (shown > 0) {
+        // Separator between header and body
+        if (fields.length > 0 || methods.length > 0) {
             const sep = svgEl('line');
             sep.setAttribute('x1', '0'); sep.setAttribute('y1', String(HDR_H));
             sep.setAttribute('x2', String(pos.w)); sep.setAttribute('y2', String(HDR_H));
@@ -807,42 +903,108 @@ function renderDiagram(f) {
             g.appendChild(sep);
         }
 
-        // Method rows
-        for (let mi = 0; mi < shown; mi++) {
-            const m = cls.methods[mi];
-            const yPos = HDR_H + 6 + mi * ROW_H;
+        let curY = HDR_H;
 
-            const dot = svgEl('circle');
-            dot.setAttribute('cx', '12'); dot.setAttribute('cy', String(yPos + 7));
-            dot.setAttribute('r', '3');
-            dot.setAttribute('fill', color); dot.setAttribute('fill-opacity', '0.6');
-            g.appendChild(dot);
+        // Fields
+        if (fields.length > 0) {
+            curY += 6;
+            fields.forEach(field => {
+                const dot = svgEl('circle');
+                dot.setAttribute('cx', '14'); dot.setAttribute('cy', String(curY + 8));
+                dot.setAttribute('r', '3');
+                dot.setAttribute('fill', '#7098d4'); dot.setAttribute('fill-opacity', '0.7');
+                g.appendChild(dot);
 
-            const mText = svgEl('text');
-            mText.setAttribute('x', '22');
-            mText.setAttribute('y', String(yPos + 11));
-            mText.setAttribute('font-size', '11');
-            mText.setAttribute('fill', '#aaa');
-            mText.setAttribute('font-family', "'JetBrains Mono', monospace");
-            const label = m.name + (m.params ? '(…)' : '()');
-            mText.textContent = label.length > 24 ? label.slice(0,22) + '…' : label;
-            g.appendChild(mText);
+                const fText = svgEl('text');
+                fText.setAttribute('x', '25');
+                fText.setAttribute('y', String(curY + 12));
+                fText.setAttribute('font-size', '11');
+                fText.setAttribute('fill', '#7a9cc4');
+                fText.setAttribute('font-family', "'JetBrains Mono', monospace");
+                let fLabel = field.type ? `${field.name}: ${field.type}` : field.name;
+                if (fLabel.length > 28) fLabel = fLabel.slice(0, 26) + '…';
+                fText.textContent = fLabel;
+                g.appendChild(fText);
+
+                if (field.isStatic || field.isFinal) {
+                    const tagX = pos.w - (field.isStatic && field.isFinal ? 76 : 40);
+                    if (field.isStatic) {
+                        const st = svgEl('text');
+                        st.setAttribute('x', String(pos.w - 8));
+                        st.setAttribute('y', String(curY + 12));
+                        st.setAttribute('text-anchor', 'end');
+                        st.setAttribute('font-size', '8');
+                        st.setAttribute('fill', '#c9b000'); st.setAttribute('font-family', 'Inter, sans-serif');
+                        st.textContent = 'static';
+                        g.appendChild(st);
+                    }
+                }
+
+                curY += FIELD_H;
+            });
+
+            if ((cls.fields || []).length > MAX_FIELDS) {
+                const more = svgEl('text');
+                more.setAttribute('x', '14');
+                more.setAttribute('y', String(curY + 10));
+                more.setAttribute('font-size', '10');
+                more.setAttribute('fill', '#555');
+                more.setAttribute('font-family', 'Inter, sans-serif');
+                more.textContent = `+${(cls.fields || []).length - MAX_FIELDS} more`;
+                g.appendChild(more);
+                curY += 16;
+            }
+            curY += 4;
         }
 
-        if (cls.methods.length > MAX_METHS) {
-            const more = svgEl('text');
-            more.setAttribute('x', '12');
-            more.setAttribute('y', String(HDR_H + 6 + MAX_METHS * ROW_H + 2));
-            more.setAttribute('font-size', '10');
-            more.setAttribute('fill', '#555');
-            more.setAttribute('font-family', 'Inter, sans-serif');
-            more.textContent = `+${cls.methods.length - MAX_METHS} more`;
-            g.appendChild(more);
+        // Dashed divider between fields and methods
+        if (fields.length > 0 && methods.length > 0) {
+            const div = svgEl('line');
+            div.setAttribute('x1', '8'); div.setAttribute('y1', String(curY));
+            div.setAttribute('x2', String(pos.w - 8)); div.setAttribute('y2', String(curY));
+            div.setAttribute('stroke', '#383838'); div.setAttribute('stroke-width', '1');
+            div.setAttribute('stroke-dasharray', '4 4');
+            g.appendChild(div);
+            curY += 2;
         }
 
-        // Drag handling
+        // Methods
+        if (methods.length > 0) {
+            curY += 6;
+            methods.forEach(m => {
+                const dot = svgEl('circle');
+                dot.setAttribute('cx', '14'); dot.setAttribute('cy', String(curY + 9));
+                dot.setAttribute('r', '3.5');
+                dot.setAttribute('fill', color); dot.setAttribute('fill-opacity', '0.65');
+                g.appendChild(dot);
+
+                const mText = svgEl('text');
+                mText.setAttribute('x', '25');
+                mText.setAttribute('y', String(curY + 13));
+                mText.setAttribute('font-size', '11.5');
+                mText.setAttribute('fill', '#aaa');
+                mText.setAttribute('font-family', "'JetBrains Mono', monospace");
+                const label = m.name + (m.params ? '(…)' : '()');
+                mText.textContent = label.length > 26 ? label.slice(0, 24) + '…' : label;
+                g.appendChild(mText);
+
+                curY += ROW_H;
+            });
+
+            if (cls.methods.length > MAX_METHS) {
+                const more = svgEl('text');
+                more.setAttribute('x', '14');
+                more.setAttribute('y', String(curY + 10));
+                more.setAttribute('font-size', '10');
+                more.setAttribute('fill', '#555');
+                more.setAttribute('font-family', 'Inter, sans-serif');
+                more.textContent = `+${cls.methods.length - MAX_METHS} more`;
+                g.appendChild(more);
+            }
+        }
+
+        // Drag
         let dragging = false, startX, startY, origX, origY;
-
         g.addEventListener('mousedown', e => {
             dragging = true;
             startX = e.clientX; startY = e.clientY;
@@ -851,19 +1013,15 @@ function renderDiagram(f) {
             g.style.cursor = 'grabbing';
             e.preventDefault();
         });
-
         diagramSvg.addEventListener('mousemove', e => {
             if (!dragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const nx = Math.max(0, origX + dx);
-            const ny = Math.max(0, origY + dy);
+            const nx = Math.max(0, origX + e.clientX - startX);
+            const ny = Math.max(0, origY + e.clientY - startY);
             diagPositions[cls.name].x = nx;
             diagPositions[cls.name].y = ny;
             g.setAttribute('transform', `translate(${nx},${ny})`);
             drawArrows(rel, arrowLayer, classes);
         });
-
         diagramSvg.addEventListener('mouseup', () => {
             if (dragging) { dragging = false; g.style.cursor = 'grab'; }
         });
@@ -871,59 +1029,38 @@ function renderDiagram(f) {
         diagramSvg.appendChild(g);
     });
 
-    // Draw initial arrows
     drawArrows(rel, arrowLayer, classes);
 }
 
 function drawArrows(rel, layer, classes) {
     layer.innerHTML = '';
-
-    // extends arrows
     classes.forEach(cls => {
         if (!cls.bases) return;
-        const from = diagPositions[cls.name];
-        const to   = diagPositions[cls.bases];
-        if (!from || !to) return;
-        drawArrow(layer, from, to, '#4ec9b0', 'none', 'mk-ext');
+        const from = diagPositions[cls.name], to = diagPositions[cls.bases];
+        if (from && to) drawArrow(layer, from, to, '#4ec9b0', 'none', 'mk-ext');
     });
-
-    // implements arrows
     Object.entries(rel.implementsMap).forEach(([clsName, ifaces]) => {
         const from = diagPositions[clsName];
         if (!from) return;
         ifaces.forEach(iface => {
             const to = diagPositions[iface];
-            if (!to) return;
-            drawArrow(layer, from, to, '#569cd6', '6 3', 'mk-impl');
+            if (to) drawArrow(layer, from, to, '#569cd6', '6 3', 'mk-impl');
         });
     });
-
-    // creates (new) arrows
     Object.entries(rel.instantiation).forEach(([creator, created]) => {
         const from = diagPositions[creator];
         if (!from) return;
         created.forEach(name => {
             const to = diagPositions[name];
-            if (!to) return;
-            drawArrow(layer, from, to, '#dcdcaa', '3 4', 'mk-new');
+            if (to) drawArrow(layer, from, to, '#dcdcaa', '3 4', 'mk-new');
         });
     });
 }
 
 function drawArrow(layer, from, to, color, dasharray, markerId) {
-    // Center points
-    const fx = from.x + from.w / 2;
-    const fy = from.y + from.h / 2;
-    const tx = to.x + to.w / 2;
-    const ty = to.y + to.h / 2;
-
-    // Edge intersection points
-    const [sx, sy] = boxEdge(from, tx, ty);
-    const [ex, ey] = boxEdge(to, fx, fy);
-
-    // Bezier control points
-    const mx = (sx + ex) / 2;
-    const my = (sy + ey) / 2;
+    const [sx, sy] = boxEdge(from, to.x + to.w / 2, to.y + to.h / 2);
+    const [ex, ey] = boxEdge(to,   from.x + from.w / 2, from.y + from.h / 2);
+    const mx = (sx + ex) / 2, my = (sy + ey) / 2;
 
     const path = svgEl('path');
     path.setAttribute('d', `M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`);
@@ -937,25 +1074,17 @@ function drawArrow(layer, from, to, color, dasharray, markerId) {
 }
 
 function boxEdge(pos, toX, toY) {
-    const cx = pos.x + pos.w / 2;
-    const cy = pos.y + pos.h / 2;
-    const dx = toX - cx;
-    const dy = toY - cy;
-    const hw = pos.w / 2;
-    const hh = pos.h / 2;
-
+    const cx = pos.x + pos.w / 2, cy = pos.y + pos.h / 2;
+    const dx = toX - cx, dy = toY - cy;
+    const hw = pos.w / 2, hh = pos.h / 2;
     if (dx === 0 && dy === 0) return [cx, cy];
-
     const absDx = Math.abs(dx), absDy = Math.abs(dy);
-
     if (absDx * hh >= absDy * hw) {
-        // left or right edge
         const side = dx > 0 ? 1 : -1;
         const x = cx + side * hw;
         const y = cy + dy * (hw / absDx);
         return [x, Math.max(pos.y, Math.min(pos.y + pos.h, y))];
     } else {
-        // top or bottom edge
         const side = dy > 0 ? 1 : -1;
         const y = cy + side * hh;
         const x = cx + dx * (hh / absDy);
@@ -976,8 +1105,54 @@ function parseCode(code, ext) {
         case 'java': return parseJava(code);
         case 'c':    return parseCLike(code, false);
         case 'cpp':  return parseCLike(code, true);
-        default:     return { classes: [], functions: [] };
+        default:     return { classes: [], functions: [], imports: [] };
     }
+}
+
+// ── Shared: Import Parser ──────────────────────────────────────────────────
+
+function parseImports(code, ext) {
+    const lines = code.split('\n');
+    const imports = [];
+
+    for (const line of lines) {
+        const trimLine = line.trim();
+        if (!trimLine) continue;
+
+        if (ext === 'java') {
+            const m = trimLine.match(/^import\s+([\w.]+(?:\.\*)?)\s*;/);
+            if (m) imports.push(m[1]);
+        } else if (ext === 'py') {
+            let m = trimLine.match(/^import\s+(.+)/);
+            if (m) {
+                m[1].split(',').forEach(s => {
+                    const name = s.trim().split(/\s+as\s+/)[0].trim();
+                    if (name) imports.push(name);
+                });
+                continue;
+            }
+            m = trimLine.match(/^from\s+([\w.]+)\s+import\s+(.+)/);
+            if (m) {
+                const mod = m[1];
+                m[2].split(',').forEach(s => {
+                    const name = s.trim().split(/\s+as\s+/)[0].trim();
+                    if (name) imports.push(`${mod}.${name}`);
+                });
+            }
+        } else if (ext === 'js') {
+            let m = trimLine.match(/^import\s+.*\s+from\s+['"]([^'"]+)['"]/);
+            if (m) { imports.push(m[1]); continue; }
+            m = trimLine.match(/^import\s+['"]([^'"]+)['"]/);
+            if (m) { imports.push(m[1]); continue; }
+            m = trimLine.match(/require\(\s*['"]([^'"]+)['"]\s*\)/);
+            if (m) imports.push(m[1]);
+        } else if (ext === 'c' || ext === 'cpp') {
+            const m = trimLine.match(/^#include\s+[<"]([^>"]+)[>"]/);
+            if (m) imports.push(m[1]);
+        }
+    }
+
+    return imports;
 }
 
 // ── Python ─────────────────────────────────────────────────────────────────
@@ -1023,7 +1198,7 @@ function parsePython(code) {
 
     for (const item of items) {
         if (item.kind === 'class') {
-            classes.push({ type:'class', ...item, methods:[] });
+            classes.push({ type:'class', ...item, methods:[], fields:[] });
         } else {
             const parent = [...classes].reverse().find(c =>
                 c.lineStart < item.lineStart &&
@@ -1035,7 +1210,74 @@ function parsePython(code) {
         }
     }
 
-    return { classes, functions: fns };
+    // Extract fields after methods are known
+    classes.forEach(cls => { cls.fields = parsePythonFields(lines, cls); });
+
+    return { classes, functions: fns, imports: parseImports(code, 'py') };
+}
+
+function parsePythonFields(lines, cls) {
+    const fields = [];
+    const seen   = new Set();
+
+    // Determine class body indent from first non-empty non-comment line
+    let bodyIndent = -1;
+    for (let i = cls.lineStart; i < Math.min(cls.lineStart + 8, cls.lineEnd); i++) {
+        const raw = lines[i];
+        const tr  = raw.trimStart();
+        if (!tr || tr.startsWith('#')) continue;
+        const ind = raw.length - tr.length;
+        if (ind > cls.indent) { bodyIndent = ind; break; }
+    }
+    if (bodyIndent < 0) return fields;
+
+    // Class-level typed annotations and UPPER_CASE constants
+    for (let i = cls.lineStart; i < cls.lineEnd && i < lines.length; i++) {
+        const raw = lines[i];
+        const tr  = raw.trimStart();
+        if (!tr || tr.startsWith('#') || tr.startsWith('def ') || tr.startsWith('class ')) continue;
+        const ind = raw.length - tr.length;
+        if (ind !== bodyIndent) continue;
+
+        // Type annotation: name: Type or name: Type = value
+        let m = tr.match(/^(\w+)\s*:\s*([\w\[\], .|"']+?)\s*(?:=.*)?$/);
+        if (m && !['pass', 'return', 'raise', 'break', 'continue', 'True', 'False', 'None'].includes(m[1])) {
+            if (!seen.has(m[1])) {
+                seen.add(m[1]);
+                fields.push({ name: m[1], type: m[2].trim(), modifiers: [], isStatic: true, isFinal: false });
+                continue;
+            }
+        }
+        // UPPER_CASE constant
+        m = tr.match(/^([A-Z][A-Z0-9_]{1,})\s*=/);
+        if (m && !seen.has(m[1])) {
+            seen.add(m[1]);
+            fields.push({ name: m[1], type: null, modifiers: [], isStatic: true, isFinal: true });
+        }
+    }
+
+    // self.x in __init__
+    const initMethod = cls.methods.find(m => m.name === '__init__');
+    if (initMethod) {
+        for (let i = initMethod.lineStart - 1; i < initMethod.lineEnd && i < lines.length; i++) {
+            const tr = lines[i].trim();
+            // Type-annotated: self.name: Type = ...
+            let m = tr.match(/^self\.(\w+)\s*:\s*([\w\[\], .|]+?)\s*=/);
+            if (m && !seen.has(m[1])) {
+                seen.add(m[1]);
+                fields.push({ name: m[1], type: m[2].trim(), modifiers: [], isStatic: false, isFinal: false });
+                continue;
+            }
+            // Plain: self.name = ...
+            m = tr.match(/^self\.(\w+)\s*=/);
+            if (m && !seen.has(m[1])) {
+                seen.add(m[1]);
+                fields.push({ name: m[1], type: null, modifiers: [], isStatic: false, isFinal: false });
+            }
+        }
+    }
+
+    return fields;
 }
 
 // ── JavaScript ─────────────────────────────────────────────────────────────
@@ -1052,8 +1294,9 @@ function parseJS(code) {
         const cm = trimLine.match(/^(?:export\s+)?(?:default\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/);
         if (cm && trimLine.includes('{')) {
             const lineEnd = braceEnd(lines, i);
-            const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[] };
+            const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[], fields:[] };
             parseJSMethods(lines, i, lineEnd, cls.methods);
+            cls.fields = parseJSFields(lines, cls);
             classes.push(cls);
             continue;
         }
@@ -1070,7 +1313,7 @@ function parseJS(code) {
         if (fe) { fns.push({ type:'function', name:fe[1], params:clean(fe[2]), lineStart:i+1, lineEnd:braceEnd(lines,i), description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) }); }
     }
 
-    return { classes, functions: fns };
+    return { classes, functions: fns, imports: parseImports(code, 'js') };
 }
 
 function parseJSMethods(lines, clsStart, clsEnd, methods) {
@@ -1097,6 +1340,50 @@ function parseJSMethods(lines, clsStart, clsEnd, methods) {
     }
 }
 
+function parseJSFields(lines, cls) {
+    const fields = [];
+    const seen   = new Set();
+    let depth = 0;
+
+    for (let i = cls.lineStart - 1; i < cls.lineEnd && i < lines.length; i++) {
+        const line = lines[i];
+        for (const ch of line) {
+            if (ch === '{') depth++;
+            if (ch === '}') depth--;
+        }
+        if (depth !== 1) continue;
+
+        const tr = line.trim();
+        if (!tr || tr.startsWith('//') || tr.startsWith('*')) continue;
+        // Skip method-like lines
+        if (tr.match(/\w+\s*\(.*\)\s*\{/)) continue;
+
+        // Class field: static? name = or #name =
+        const fm = tr.match(/^(static\s+)?(?:#)?(\w+)\s*(?:=(?!=)|;)/);
+        if (fm && fm[2] && !['constructor', 'get', 'set', 'async', 'if', 'for', 'while', 'return', 'class', 'function', 'const', 'let', 'var', 'import', 'export'].includes(fm[2])) {
+            if (!seen.has(fm[2])) {
+                seen.add(fm[2]);
+                fields.push({ name: fm[2], type: null, modifiers: fm[1] ? ['static'] : [], isStatic: !!fm[1], isFinal: false });
+            }
+        }
+    }
+
+    // this.x = in constructor
+    const ctor = cls.methods.find(m => m.name === 'constructor');
+    if (ctor) {
+        for (let i = ctor.lineStart - 1; i < ctor.lineEnd && i < lines.length; i++) {
+            const tr = lines[i].trim();
+            const m = tr.match(/^this\.(\w+)\s*=/);
+            if (m && !seen.has(m[1])) {
+                seen.add(m[1]);
+                fields.push({ name: m[1], type: null, modifiers: [], isStatic: false, isFinal: false });
+            }
+        }
+    }
+
+    return fields;
+}
+
 // ── Java ───────────────────────────────────────────────────────────────────
 
 function parseJava(code) {
@@ -1110,13 +1397,14 @@ function parseJava(code) {
         const cm = trimLine.match(/^(?:(?:public|private|protected|abstract|final|static)\s+)*(?:class|interface|enum)\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+[\w\s,<>]+)?\s*\{/);
         if (cm) {
             const lineEnd = braceEnd(lines, i);
-            const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[] };
+            const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[], fields:[] };
             parseJavaMethods(lines, i, lineEnd, cls.methods);
+            cls.fields = parseJavaFields(lines, i, lineEnd);
             classes.push(cls);
         }
     }
 
-    return { classes, functions: [] };
+    return { classes, functions: [], imports: parseImports(code, 'java') };
 }
 
 function parseJavaMethods(lines, clsStart, clsEnd, methods) {
@@ -1142,6 +1430,37 @@ function parseJavaMethods(lines, clsStart, clsEnd, methods) {
     }
 }
 
+function parseJavaFields(lines, clsStart, clsEnd) {
+    const fields = [];
+    let depth = 0;
+    for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
+        for (const ch of lines[i]) {
+            if (ch === '{') depth++;
+            if (ch === '}') depth--;
+        }
+        if (depth !== 1) continue;
+
+        const tr = lines[i].trim();
+        if (!tr || tr.startsWith('//') || tr.startsWith('*') || tr.startsWith('@')) continue;
+        if (tr.includes('(')) continue; // skip methods and calls
+        if (tr.startsWith('{') || tr.startsWith('}')) continue;
+
+        // [modifiers] type name [= ...] ;
+        const fm = tr.match(/^((?:(?:public|private|protected|static|final|volatile|transient)\s+)*)(\w[\w<>\[\],\s]*?)\s+(\w+)\s*(?:=.+)?;$/);
+        if (fm && fm[3] && fm[3] !== 'class') {
+            const mods = fm[1].trim().split(/\s+/).filter(Boolean);
+            fields.push({
+                name: fm[3],
+                type: fm[2].trim(),
+                modifiers: mods,
+                isStatic: mods.includes('static'),
+                isFinal: mods.includes('final')
+            });
+        }
+    }
+    return fields;
+}
+
 // ── C / C++ ────────────────────────────────────────────────────────────────
 
 function parseCLike(code, isCpp) {
@@ -1157,8 +1476,9 @@ function parseCLike(code, isCpp) {
             const cm = trimLine.match(/^(?:class|struct)\s+(\w+)(?:\s*:\s*(?:public|private|protected)\s+(\w+))?\s*\{/);
             if (cm) {
                 const lineEnd = braceEnd(lines, i);
-                const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[] };
+                const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[], fields:[] };
                 parseCppMethods(lines, i, lineEnd, cls.methods);
+                cls.fields = parseCppFields(lines, i, lineEnd);
                 classes.push(cls);
                 i = lineEnd - 1;
                 continue;
@@ -1176,7 +1496,7 @@ function parseCLike(code, isCpp) {
         }
     }
 
-    return { classes, functions: fns };
+    return { classes, functions: fns, imports: parseImports(code, isCpp ? 'cpp' : 'c') };
 }
 
 function parseCppMethods(lines, clsStart, clsEnd, methods) {
@@ -1200,6 +1520,37 @@ function parseCppMethods(lines, clsStart, clsEnd, methods) {
             depth = 1;
         }
     }
+}
+
+function parseCppFields(lines, clsStart, clsEnd) {
+    const fields = [];
+    let depth = 0;
+    for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
+        for (const ch of lines[i]) {
+            if (ch === '{') depth++;
+            if (ch === '}') depth--;
+        }
+        if (depth !== 1) continue;
+
+        const tr = lines[i].trim();
+        if (!tr || tr.startsWith('//') || tr.startsWith('*')) continue;
+        if (tr.endsWith(':')) continue; // access specifiers (public:, private:)
+        if (tr.includes('(')) continue; // skip methods
+
+        // [static|const] type name [= ...] ;
+        const fm = tr.match(/^((?:(?:static|const|volatile|mutable)\s+)*)(\w[\w*&<>, ]*?)\s+(\w+)\s*(?:=.*)?;$/);
+        if (fm && fm[3] && !['public', 'private', 'protected', 'if', 'for', 'while', 'return', 'else'].includes(fm[3])) {
+            const mods = fm[1].trim().split(/\s+/).filter(Boolean);
+            fields.push({
+                name: fm[3],
+                type: fm[2].trim(),
+                modifiers: mods,
+                isStatic: mods.includes('static'),
+                isFinal: mods.includes('const')
+            });
+        }
+    }
+    return fields;
 }
 
 // ─── Comment / Docstring Extraction ──────────────────────────────────────────
