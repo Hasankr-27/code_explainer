@@ -27,6 +27,7 @@ const lineNumsEl       = $('line-nums');
 const codeEl           = $('code-el');
 const hlOverlay        = $('hl-overlay');
 const structureBody    = $('structure-body');
+const relationsBody    = $('relations-body');
 const emptyState       = $('empty-state');
 const errorToast       = $('error-toast');
 const errorMsg         = $('error-msg');
@@ -34,6 +35,8 @@ const closeToast       = $('close-toast');
 const fileIndicator    = $('file-indicator');
 const activeFileName   = $('active-file-name');
 const activeFileLang   = $('active-file-lang');
+
+let activeTab = 'struct';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -93,6 +96,16 @@ function selectFile(idx) {
     renderAll();
 }
 
+// ─── Tab Switching ────────────────────────────────────────────────────────────
+
+function switchTab(tab) {
+    activeTab = tab;
+    $('tab-struct').classList.toggle('active', tab === 'struct');
+    $('tab-rel').classList.toggle('active', tab === 'rel');
+    structureBody.classList.toggle('hidden', tab !== 'struct');
+    relationsBody.classList.toggle('hidden', tab !== 'rel');
+}
+
 // ─── Render All ───────────────────────────────────────────────────────────────
 
 function renderAll() {
@@ -110,10 +123,12 @@ function renderAll() {
         renderFileList();
         renderCode(f);
         renderStructure(f);
+        renderRelations(f);
     } else {
         structureBody.innerHTML = '';
         structureBody.appendChild(emptyState);
         emptyState.classList.remove('hidden');
+        relationsBody.innerHTML = '';
     }
 }
 
@@ -318,6 +333,250 @@ function buildMethodCard(m) {
     }
 
     return card;
+}
+
+// ─── Relations Analysis ───────────────────────────────────────────────────────
+
+function analyzeRelations(code, classes, ext) {
+    const lines = code.split('\n');
+    const classNames = new Set(classes.map(c => c.name));
+
+    // Detect class types: abstract, interface, enum, concrete
+    const classType = {};
+    for (const line of lines) {
+        const t = line.trim();
+        let m;
+        if ((m = t.match(/(?:^|\s)abstract\s+class\s+(\w+)/)))  classType[m[1]] = 'abstract';
+        if ((m = t.match(/(?:^|\s)interface\s+(\w+)/)))          classType[m[1]] = 'interface';
+        if ((m = t.match(/(?:^|\s)enum\s+(\w+)/)))               classType[m[1]] = 'enum';
+    }
+    classes.forEach(c => { if (!classType[c.name]) classType[c.name] = 'concrete'; });
+
+    // Implements detection (Java)
+    const implementsMap = {}; // {className: [interfaceNames]}
+    for (const line of lines) {
+        const m = line.match(/class\s+(\w+)(?:\s+extends\s+\w+)?\s+implements\s+([\w\s,<>]+?)\s*(?:\{|$)/);
+        if (m) {
+            implementsMap[m[1]] = m[2].split(',').map(s => s.replace(/<[^>]*>/g,'').trim()).filter(Boolean);
+        }
+    }
+
+    // Instantiation: scan each class body for `new ClassName(`
+    const instantiation = {}; // {className: Set}
+    classes.forEach(cls => {
+        const body = lines.slice(cls.lineStart - 1, cls.lineEnd).join('\n');
+        const creates = new Set();
+        const re = /\bnew\s+(\w+)\s*[(<[]/g;
+        let m;
+        while ((m = re.exec(body)) !== null) {
+            const name = m[1];
+            if (classNames.has(name) && name !== cls.name) creates.add(name);
+        }
+        if (creates.size) instantiation[cls.name] = [...creates];
+    });
+
+    // Method-level instantiation (which method creates what)
+    const methodCreates = {}; // {className.methodName: [classNames]}
+    classes.forEach(cls => {
+        cls.methods.forEach(m => {
+            const body = lines.slice(m.lineStart - 1, m.lineEnd).join('\n');
+            const creates = new Set();
+            const re = /\bnew\s+(\w+)\s*[(<[]/g;
+            let match;
+            while ((match = re.exec(body)) !== null) {
+                const name = match[1];
+                if (classNames.has(name)) creates.add(name);
+            }
+            if (creates.size) methodCreates[`${cls.name}.${m.name}`] = [...creates];
+        });
+    });
+
+    return { classType, implementsMap, instantiation, methodCreates };
+}
+
+// ─── Relations Renderer ───────────────────────────────────────────────────────
+
+function renderRelations(f) {
+    relationsBody.innerHTML = '';
+    const { classes } = f.parsed;
+
+    if (!classes.length) {
+        const e = mk('div', 'empty-state');
+        e.innerHTML = '<p>No classes found to analyze.</p>';
+        relationsBody.appendChild(e);
+        return;
+    }
+
+    const rel = analyzeRelations(f.content, classes, f.ext);
+
+    // ── Section 1: Class Types ──
+    const typeSection = relSection('type', 'Class Types');
+    classes.forEach(cls => {
+        const ct  = rel.classType[cls.name] || 'concrete';
+        const card = mk('div', 'rel-card');
+        const hdr  = mk('div', 'rel-card-hdr');
+
+        const badge = mk('span', 'rel-badge rb-' + ct);
+        badge.textContent = ct;
+
+        const name = mk('span', 'rel-name');
+        name.textContent = cls.name;
+
+        const viewBtn = mk('button', 'view-btn');
+        viewBtn.textContent = 'View';
+        viewBtn.addEventListener('click', () => {
+            switchTab('struct');
+            highlightLines(cls.lineStart, cls.lineEnd);
+        });
+
+        hdr.append(badge, name, viewBtn);
+        card.appendChild(hdr);
+
+        const rows = [];
+
+        // extends
+        if (cls.bases) {
+            rows.push(relRow('extends', [{ text: cls.bases, cls: 'ext' }]));
+        }
+
+        // implements
+        const impls = rel.implementsMap[cls.name];
+        if (impls && impls.length) {
+            rows.push(relRow('implements', impls.map(i => ({ text: i, cls: 'impl' }))));
+        }
+
+        // creates (instantiation)
+        const creates = rel.instantiation[cls.name];
+        if (creates && creates.length) {
+            rows.push(relRow('creates', creates.map(c => ({ text: c, cls: 'new' }))));
+        }
+
+        if (rows.length) {
+            const rowsWrap = mk('div', 'rel-rows');
+            rows.forEach(r => rowsWrap.appendChild(r));
+            card.appendChild(rowsWrap);
+        }
+
+        typeSection.appendChild(card);
+    });
+    relationsBody.appendChild(typeSection);
+
+    // ── Section 2: Inheritance Map ──
+    const hasInheritance = classes.some(c => c.bases || rel.implementsMap[c.name]);
+    if (hasInheritance) {
+        const inhSection = relSection('inh', 'Inheritance');
+        // Find root classes (not extended by anyone as child) and build tree
+        const childrenOf = {}; // {parentName: [childClass]}
+        classes.forEach(cls => {
+            if (cls.bases) {
+                if (!childrenOf[cls.bases]) childrenOf[cls.bases] = [];
+                childrenOf[cls.bases].push(cls);
+            }
+        });
+        // Show each parent→children relationship
+        Object.entries(childrenOf).forEach(([parent, children]) => {
+            const card = mk('div', 'rel-card');
+            const hdr  = mk('div', 'rel-card-hdr');
+            const name = mk('span', 'rel-name');
+            name.textContent = parent;
+            const badge = mk('span', 'rel-badge rb-' + (rel.classType[parent] || 'concrete'));
+            badge.textContent = rel.classType[parent] || 'class';
+            hdr.append(badge, name);
+            card.appendChild(hdr);
+
+            const rowsWrap = mk('div', 'rel-rows');
+            children.forEach(child => {
+                const row = mk('div', 'rel-row');
+                const lbl = mk('span', 'rel-row-label');
+                lbl.textContent = '↳ subclass';
+                const targets = mk('div', 'rel-targets');
+                const t = mk('span', 'rel-target ext');
+                t.textContent = child.name;
+                t.addEventListener('click', () => { switchTab('struct'); highlightLines(child.lineStart, child.lineEnd); });
+                targets.appendChild(t);
+                row.append(lbl, targets);
+                rowsWrap.appendChild(row);
+            });
+            card.appendChild(rowsWrap);
+            inhSection.appendChild(card);
+        });
+        relationsBody.appendChild(inhSection);
+    }
+
+    // ── Section 3: Object Instantiation Map ──
+    if (Object.keys(rel.instantiation).length) {
+        const instSection = relSection('inst', 'Object Creation');
+        Object.entries(rel.instantiation).forEach(([creator, created]) => {
+            const cls = classes.find(c => c.name === creator);
+            const card = mk('div', 'rel-card');
+            const hdr  = mk('div', 'rel-card-hdr');
+            const name = mk('span', 'rel-name');
+            name.textContent = creator;
+            const badge = mk('span', 'rel-badge rb-' + (rel.classType[creator] || 'concrete'));
+            badge.textContent = rel.classType[creator] || 'class';
+            if (cls) {
+                const v = mk('button', 'view-btn');
+                v.textContent = 'View';
+                v.addEventListener('click', () => { switchTab('struct'); highlightLines(cls.lineStart, cls.lineEnd); });
+                hdr.append(badge, name, v);
+            } else {
+                hdr.append(badge, name);
+            }
+            card.appendChild(hdr);
+
+            const rowsWrap = mk('div', 'rel-rows');
+            rowsWrap.appendChild(relRow('new →', created.map(c => ({ text: c, cls: 'new' }))));
+
+            // Method-level breakdown
+            cls && cls.methods.forEach(m => {
+                const key = `${creator}.${m.name}`;
+                const mc = rel.methodCreates[key];
+                if (mc && mc.length) {
+                    const mRow = mk('div', 'rel-row');
+                    const lbl = mk('span', 'rel-row-label');
+                    lbl.style.fontFamily = 'var(--mono)';
+                    lbl.textContent = m.name + '()';
+                    const targets = mk('div', 'rel-targets');
+                    mc.forEach(c => {
+                        const t = mk('span', 'rel-target new');
+                        t.textContent = 'new ' + c;
+                        t.addEventListener('click', () => {
+                            switchTab('struct'); highlightLines(m.lineStart, m.lineEnd);
+                        });
+                        targets.appendChild(t);
+                    });
+                    mRow.append(lbl, targets);
+                    rowsWrap.appendChild(mRow);
+                }
+            });
+
+            card.appendChild(rowsWrap);
+            instSection.appendChild(card);
+        });
+        relationsBody.appendChild(instSection);
+    }
+}
+
+function relSection(type, title) {
+    const section = mk('div', 'rel-section');
+    const hdr = mk('div', 'rel-section-title ' + type);
+    hdr.textContent = title;
+    section.appendChild(hdr);
+    return section;
+}
+
+function relRow(label, targets) {
+    const row = mk('div', 'rel-row');
+    const lbl = mk('span', 'rel-row-label');
+    lbl.textContent = label;
+    const tWrap = mk('div', 'rel-targets');
+    targets.forEach(({ text, cls }) => {
+        const t = mk('span', 'rel-target ' + (cls || ''));
+        t.textContent = text;
+        tWrap.appendChild(t);
+    });
+    row.append(lbl, tWrap);
+    return row;
 }
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────

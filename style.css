@@ -229,6 +229,7 @@ body {
     background: #1e1e1e;
     font-family: var(--mono);
     font-size: 12px; line-height: 1.75;
+    min-height: 0;
 }
 .code-container::-webkit-scrollbar { width: 6px; height: 6px; }
 .code-container::-webkit-scrollbar-track { background: transparent; }
@@ -279,6 +280,28 @@ body {
     overflow: hidden; background: var(--bg);
 }
 
+/* Tabs */
+.right-tabs {
+    display: flex; gap: 2px;
+    padding: 6px 10px 0;
+    border-bottom: 1px solid var(--border-dim);
+    flex-shrink: 0;
+    background: var(--panel);
+}
+
+.r-tab {
+    background: none; border: none;
+    color: var(--text-muted); cursor: pointer;
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .07em;
+    padding: 4px 12px 6px;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    margin-bottom: -1px;
+}
+.r-tab:hover { color: var(--text); }
+.r-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
 .structure-body {
     flex: 1; overflow-y: auto;
     padding: 12px; display: flex;
@@ -286,6 +309,93 @@ body {
 }
 .structure-body::-webkit-scrollbar { width: 6px; }
 .structure-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ─── Relations Panel ─────────────────────────────────────────────────────── */
+
+.rel-section {
+    display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px;
+}
+
+.rel-section-title {
+    font-size: 9.5px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--text-dim);
+    padding: 4px 0 6px;
+    border-bottom: 1px solid var(--border-dim);
+    display: flex; align-items: center; gap: 6px;
+}
+.rel-section-title::before {
+    content: ''; display: inline-block;
+    width: 3px; height: 11px;
+    border-radius: 2px;
+}
+.rel-section-title.inh::before  { background: #4ec9b0; }
+.rel-section-title.inst::before { background: #dcdcaa; }
+.rel-section-title.type::before { background: #c586c0; }
+
+.rel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.rel-card-hdr {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 11px;
+}
+
+.rel-name {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+    color: var(--text); flex: 1;
+}
+
+.rel-badge {
+    font-size: 8.5px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .05em; padding: 2px 6px; border-radius: 3px; flex-shrink: 0;
+}
+.rb-abstract  { background: rgba(197,134,192,.15); color: #c586c0; border: 1px solid rgba(197,134,192,.3); }
+.rb-interface { background: rgba(86,156,214,.15);  color: var(--primary); border: 1px solid rgba(86,156,214,.3); }
+.rb-concrete  { background: rgba(78,201,176,.10);  color: var(--class-color); border: 1px solid rgba(78,201,176,.25); }
+.rb-enum      { background: rgba(220,220,170,.10); color: var(--fn-color); border: 1px solid rgba(220,220,170,.25); }
+
+.rel-rows {
+    border-top: 1px solid var(--border-dim);
+    display: flex; flex-direction: column;
+}
+
+.rel-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 5px 11px;
+    border-bottom: 1px solid var(--border-dim);
+    font-size: 11.5px;
+}
+.rel-row:last-child { border-bottom: none; }
+
+.rel-row-label {
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text-dim);
+    flex-shrink: 0; margin-top: 1px; min-width: 72px;
+}
+
+.rel-arrow {
+    color: var(--text-dim); flex-shrink: 0; font-size: 10px; margin-top: 1px;
+}
+
+.rel-targets {
+    display: flex; flex-wrap: wrap; gap: 4px; flex: 1;
+}
+
+.rel-target {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 7px;
+    color: var(--text); cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+.rel-target:hover { border-color: var(--primary); color: var(--primary); }
+.rel-target.ext  { border-color: rgba(78,201,176,.3); color: var(--class-color); }
+.rel-target.impl { border-color: rgba(86,156,214,.3); color: var(--primary); }
+.rel-target.new  { border-color: rgba(220,220,170,.3); color: var(--fn-color); }
 
 /* Empty State */
 
