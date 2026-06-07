@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Explainer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -11,16 +14,23 @@
 
 <header class="app-header">
     <div class="logo">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="16 18 22 12 16 6"></polyline>
             <polyline points="8 6 2 12 8 18"></polyline>
         </svg>
-        Code Explainer
+        <span>Code Explainer</span>
     </div>
-    <div id="file-indicator" class="file-indicator hidden">
-        <span id="active-file-name"></span>
-        <span id="active-file-lang" class="lang-chip"></span>
+
+    <div class="header-right">
+        <div id="file-indicator" class="file-indicator hidden">
+            <span id="active-file-name" class="active-name"></span>
+            <span id="active-file-lang" class="lang-chip"></span>
+        </div>
+        <div class="lang-toggle">
+            <button id="btn-en" class="lang-btn active" onclick="switchLang('en')">EN</button>
+            <button id="btn-tr" class="lang-btn" onclick="switchLang('tr')">TR</button>
+        </div>
     </div>
 </header>
 
@@ -29,34 +39,31 @@
     <!-- LEFT PANEL -->
     <aside class="left-panel">
 
-        <!-- Drop Zone (shown when no files) -->
         <div id="upload-section" class="upload-section">
             <div id="drop-zone" class="drop-zone">
-                <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none"
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="17 8 12 3 7 8"></polyline>
                     <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                <p class="drop-main">Drop files here</p>
-                <p class="drop-or">or <button id="browse-btn" class="text-btn">browse</button></p>
-                <p class="drop-hint">.py &nbsp;.js &nbsp;.java &nbsp;.c &nbsp;.cpp &nbsp;&middot;&nbsp; max 50 KB</p>
+                <p class="drop-main" data-t="dropMain">Drop files here</p>
+                <p class="drop-or"><span data-t="dropOr">or</span> <button id="browse-btn" class="text-btn" data-t="browse">browse</button></p>
+                <p class="drop-hint" data-t="dropHint">.py .js .java .c .cpp · max 50 KB</p>
                 <input type="file" id="file-input" multiple accept=".py,.js,.java,.c,.cpp" hidden>
             </div>
         </div>
 
-        <!-- File List (shown when files exist) -->
         <div id="file-list-section" class="file-list-section hidden">
             <div class="panel-label">
-                FILES
-                <button id="add-file-btn" class="icon-btn" title="Add more files">＋</button>
+                <span data-t="files">FILES</span>
+                <button id="add-file-btn" class="icon-btn" title="Add files">＋</button>
             </div>
             <ul id="file-list" class="file-list"></ul>
         </div>
 
-        <!-- Code Viewer -->
         <div id="code-viewer-section" class="code-viewer-section hidden">
-            <div class="panel-label">SOURCE</div>
+            <div class="panel-label"><span data-t="source">SOURCE</span></div>
             <div class="code-container" id="code-container">
                 <div class="line-nums" id="line-nums"></div>
                 <div class="code-area">
@@ -71,36 +78,51 @@
     <!-- RIGHT PANEL -->
     <section class="right-panel">
         <div class="right-tabs">
-            <button class="r-tab active" id="tab-struct" onclick="switchTab('struct')">Structure</button>
-            <button class="r-tab" id="tab-rel" onclick="switchTab('rel')">Relations</button>
+            <button class="r-tab active" id="tab-struct" onclick="switchTab('struct')" data-t="tabStruct">Structure</button>
+            <button class="r-tab" id="tab-rel"   onclick="switchTab('rel')"  data-t="tabRel">Relations</button>
+            <button class="r-tab" id="tab-diag"  onclick="switchTab('diag')" data-t="tabDiag">Diagram</button>
         </div>
 
-        <div class="structure-body" id="structure-body">
+        <!-- Structure -->
+        <div class="panel-body" id="structure-body">
             <div class="empty-state" id="empty-state">
-                <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none"
+                <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                     <line x1="16" y1="13" x2="8" y2="13"></line>
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                 </svg>
-                <p>Upload a source file to explore its structure</p>
-                <span>Supports Python, JavaScript, Java, C, C++</span>
+                <p data-t="emptyMain">Upload a source file to explore its structure</p>
+                <span data-t="emptyHint">Supports Python, JavaScript, Java, C, C++</span>
             </div>
         </div>
 
-        <div class="structure-body hidden" id="relations-body">
-            <div class="empty-state" id="rel-empty-state">
-                <p>Upload a file to see relationships</p>
+        <!-- Relations -->
+        <div class="panel-body hidden" id="relations-body"></div>
+
+        <!-- Diagram -->
+        <div class="panel-body diagram-panel hidden" id="diagram-body">
+            <div class="diagram-scroll" id="diagram-scroll">
+                <svg id="diagram-svg" class="diagram-svg"></svg>
+            </div>
+            <div class="diagram-legend" id="diagram-legend">
+                <span class="leg-item"><span class="leg-line solid" style="background:#4ec9b0"></span><span data-t="legExt">extends</span></span>
+                <span class="leg-item"><span class="leg-line dashed" style="border-color:#569cd6"></span><span data-t="legImpl">implements</span></span>
+                <span class="leg-item"><span class="leg-line dotted" style="border-color:#dcdcaa"></span><span data-t="legNew">creates (new)</span></span>
+                <span class="leg-sep"></span>
+                <span class="leg-item"><span class="leg-dot" style="background:#f97316"></span><span data-t="typeAbstract">abstract</span></span>
+                <span class="leg-item"><span class="leg-dot" style="background:#569cd6"></span><span data-t="typeInterface">interface</span></span>
+                <span class="leg-item"><span class="leg-dot" style="background:#4ec9b0"></span><span data-t="typeConcrete">class</span></span>
             </div>
         </div>
+
     </section>
 
 </main>
 
-<!-- Error Toast -->
 <div class="error-toast hidden" id="error-toast">
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
          stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"></circle>
         <line x1="12" y1="8" x2="12" y2="12"></line>
