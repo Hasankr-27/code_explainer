@@ -321,6 +321,7 @@ body {
 .s-card-interface { border-left-color: var(--iface-color); }
 .s-card-enum      { border-left-color: var(--enum-color); }
 .s-card-fn        { border-left-color: var(--fn-color); }
+.s-card-type      { border-left-color: #5cc8c8; }
 
 /* Card header */
 .s-card-hdr {
@@ -342,6 +343,7 @@ body {
 .badge-type-interface { background: rgba(86,156,214,.12);  color: var(--iface-color); }
 .badge-type-enum      { background: rgba(197,134,192,.12); color: var(--enum-color); }
 .badge-type-fn        { background: rgba(220,220,170,.10); color: var(--fn-color); }
+.badge-type-type      { background: rgba(92,200,200,.10);  color: #5cc8c8; }
 
 /* Class name inside card */
 .s-card-concrete  .sc-name { color: var(--class-color); }
@@ -349,6 +351,7 @@ body {
 .s-card-interface .sc-name { color: var(--iface-color); }
 .s-card-enum      .sc-name { color: var(--enum-color); }
 .s-card-fn        .sc-name { color: var(--fn-color); }
+.s-card-type      .sc-name { color: #5cc8c8; }
 
 .sc-name {
     font-family: var(--font-code); font-size: 16px; font-weight: 700;

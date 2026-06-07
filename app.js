@@ -1,10 +1,10 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_SIZE  = 50 * 1024;
-const SUPPORTED = ['.py', '.js', '.java', '.c', '.cpp'];
+const SUPPORTED = ['.py', '.js', '.ts', '.tsx', '.java', '.c'];
 
-const LANG_COLOR = { py:'#3572A5', js:'#c9a800', java:'#B07219', c:'#555', cpp:'#f34b7d' };
-const HLJS_LANG  = { py:'python', js:'javascript', java:'java', c:'c', cpp:'cpp' };
+const LANG_COLOR = { py:'#3572A5', js:'#c9a800', ts:'#3178c6', java:'#B07219', c:'#555' };
+const HLJS_LANG  = { py:'python', js:'javascript', ts:'typescript', tsx:'typescript', java:'java', c:'c' };
 
 // ─── Translations ─────────────────────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ const TRANSLATIONS = {
         files:'FILES', source:'SOURCE',
         tabStruct:'Structure', tabRel:'Relations', tabDiag:'Diagram',
         dropMain:'Drop files here', dropOr:'or', browse:'browse',
-        dropHint:'.py .js .java .c .cpp · max 50 KB',
+        dropHint:'.py .js .ts .java .c · max 50 KB',
         emptyMain:'Upload a source file to explore its structure',
         emptyHint:'Supports Python, JavaScript, Java, C, C++',
         noClasses:'No classes or functions detected in this file.',
@@ -34,7 +34,7 @@ const TRANSLATIONS = {
         files:'DOSYALAR', source:'KAYNAK',
         tabStruct:'Yapı', tabRel:'İlişkiler', tabDiag:'Diyagram',
         dropMain:'Dosyaları buraya bırakın', dropOr:'veya', browse:'gözat',
-        dropHint:'.py .js .java .c .cpp · maks 50 KB',
+        dropHint:'.py .js .ts .java .c · maks 50 KB',
         emptyMain:'Yapıyı keşfetmek için bir kaynak dosyası yükleyin',
         emptyHint:'Python, JavaScript, Java, C, C++ desteklenir',
         noClasses:'Bu dosyada sınıf veya fonksiyon bulunamadı.',
@@ -296,11 +296,16 @@ function detectClassTypes(content, classes) {
     for (const line of lines) {
         const tr = line.trim();
         let m;
-        if ((m = tr.match(/(?:^|\s)abstract\s+class\s+(\w+)/)))  classType[m[1]] = 'abstract';
-        if ((m = tr.match(/(?:^|\s)interface\s+(\w+)/)))          classType[m[1]] = 'interface';
-        if ((m = tr.match(/(?:^|\s)enum\s+(\w+)/)))               classType[m[1]] = 'enum';
+        if ((m = tr.match(/(?:^|\s)abstract\s+class\s+(\w+)/)))         classType[m[1]] = 'abstract';
+        if ((m = tr.match(/(?:^|\s)interface\s+(\w+)/)))                 classType[m[1]] = 'interface';
+        if ((m = tr.match(/(?:^|\s)enum\s+(\w+)/)))                      classType[m[1]] = 'enum';
+        if ((m = tr.match(/(?:^|\s)type\s+(\w+)(?:<[^>]*)?\s*=/)))      classType[m[1]] = 'type';
     }
-    classes.forEach(c => { if (!classType[c.name]) classType[c.name] = 'concrete'; });
+    // tsType set by parseTS takes precedence over content scan
+    classes.forEach(c => {
+        if (c.tsType) classType[c.name] = c.tsType;
+        else if (!classType[c.name]) classType[c.name] = 'concrete';
+    });
     return classType;
 }
 
@@ -582,7 +587,7 @@ function analyzeRelations(code, classes, ext) {
 
     const implementsMap = {};
     for (const line of lines) {
-        const m = line.match(/class\s+(\w+)(?:\s+extends\s+\w+)?\s+implements\s+([\w\s,<>]+?)\s*(?:\{|$)/);
+        const m = line.match(/class\s+(\w+)(?:<[^>]*>)?(?:\s+extends\s+[\w<>, ]+?)?\s+implements\s+([\w\s,<>]+?)\s*(?:\{|$)/);
         if (m) {
             implementsMap[m[1]] = m[2].split(',').map(s => s.replace(/<[^>]*>/g,'').trim()).filter(Boolean);
         }
@@ -1178,9 +1183,10 @@ function parseCode(code, ext) {
     switch (ext) {
         case 'py':   return parsePython(code);
         case 'js':   return parseJS(code);
+        case 'ts':
+        case 'tsx':  return parseTS(code);
         case 'java': return parseJava(code);
-        case 'c':    return parseCLike(code, false);
-        case 'cpp':  return parseCLike(code, true);
+        case 'c':    return parseCLike(code);
         default:     return { classes: [], functions: [], imports: [] };
     }
 }
@@ -1215,14 +1221,14 @@ function parseImports(code, ext) {
                     if (name) imports.push(`${mod}.${name}`);
                 });
             }
-        } else if (ext === 'js') {
-            let m = trimLine.match(/^import\s+.*\s+from\s+['"]([^'"]+)['"]/);
+        } else if (ext === 'js' || ext === 'ts') {
+            let m = trimLine.match(/^import\s+(?:type\s+)?.*\s+from\s+['"]([^'"]+)['"]/);
             if (m) { imports.push(m[1]); continue; }
             m = trimLine.match(/^import\s+['"]([^'"]+)['"]/);
             if (m) { imports.push(m[1]); continue; }
             m = trimLine.match(/require\(\s*['"]([^'"]+)['"]\s*\)/);
             if (m) imports.push(m[1]);
-        } else if (ext === 'c' || ext === 'cpp') {
+        } else if (ext === 'c') {
             const m = trimLine.match(/^#include\s+[<"]([^>"]+)[>"]/);
             if (m) imports.push(m[1]);
         }
@@ -1460,6 +1466,132 @@ function parseJSFields(lines, cls) {
     return fields;
 }
 
+// ── TypeScript ─────────────────────────────────────────────────────────────
+
+function parseTS(code) {
+    const lines   = code.split('\n');
+    const classes = [];
+    const fns     = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const tr = lines[i].trim();
+        if (!tr || tr.startsWith('//') || tr.startsWith('*')) continue;
+
+        // Interface: interface Foo<T> extends Bar, Baz {
+        const im = tr.match(/^(?:export\s+)?interface\s+(\w+)(?:<[^>]*>)?\s*(?:extends\s+([\w\s,<>]+?))?\s*\{/);
+        if (im) {
+            const lineEnd = braceEnd(lines, i);
+            const bases = im[2] ? im[2].split(',')[0].replace(/<[^>]*>/g,'').trim() : '';
+            const cls = { type:'class', name:im[1], bases, lineStart:i+1, lineEnd, methods:[], fields:[], tsType:'interface' };
+            parseTSMembers(lines, i, lineEnd, cls.methods, cls.fields);
+            classes.push(cls);
+            continue;
+        }
+
+        // Enum: [export] [const] enum Foo {
+        const em = tr.match(/^(?:export\s+)?(?:const\s+)?enum\s+(\w+)\s*\{/);
+        if (em) {
+            const lineEnd = braceEnd(lines, i);
+            classes.push({ type:'class', name:em[1], bases:'', lineStart:i+1, lineEnd, methods:[], fields:[], tsType:'enum' });
+            continue;
+        }
+
+        // Class: [export] [abstract] class Foo<T> [extends Bar] [implements IBaz, IQux]
+        const cm = tr.match(/^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)(?:<[^>]*>)?\s*(?:extends\s+([\w<>, ]+?))?\s*(?:implements\s+([\w\s,<>]+?))?\s*\{/);
+        if (cm) {
+            const lineEnd = braceEnd(lines, i);
+            const bases = cm[2] ? cm[2].replace(/<[^>]*>/g,'').split(',')[0].trim() : '';
+            const isAbstract = /(?:^|\s)abstract\s+class/.test(tr);
+            const cls = { type:'class', name:cm[1], bases, lineStart:i+1, lineEnd, methods:[], fields:[], tsType: isAbstract ? 'abstract' : 'concrete' };
+            parseTSMembers(lines, i, lineEnd, cls.methods, cls.fields);
+            classes.push(cls);
+            continue;
+        }
+
+        // Type alias: [export] type Foo<T> = ...
+        const tam = tr.match(/^(?:export\s+)?type\s+(\w+)(?:<[^>]*>)?\s*=/);
+        if (tam) {
+            classes.push({ type:'class', name:tam[1], bases:'', lineStart:i+1, lineEnd:i+1, methods:[], fields:[], tsType:'type' });
+            continue;
+        }
+
+        // Skip lines inside class/interface bodies
+        if (classes.some(c => c.lineEnd > c.lineStart && i+1 > c.lineStart && i+1 < c.lineEnd)) continue;
+
+        // Function declaration
+        const fd = tr.match(/^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*(?:<[^>]*>)?\s*\(([^)]*)\)\s*(?::\s*([^{]+?))?\s*\{/);
+        if (fd) {
+            fns.push({ type:'function', name:fd[1], params:clean(fd[2]), returnType:fd[3]?fd[3].trim():null, lineStart:i+1, lineEnd:braceEnd(lines,i), description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
+            continue;
+        }
+
+        // Arrow / const function
+        const ae = tr.match(/^(?:export\s+)?(?:const|let)\s+(\w+)\s*(?::[^=]+)?\s*=\s*(?:async\s+)?\(?([^)=>{]*)\)?\s*(?::\s*[^=>{]+?)?\s*=>/);
+        if (ae) {
+            fns.push({ type:'function', name:ae[1], params:clean(ae[2]), returnType:null, lineStart:i+1, lineEnd:braceEnd(lines,i), description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
+        }
+    }
+
+    return { classes, functions: fns, imports: parseImports(code, 'ts') };
+}
+
+function parseTSMembers(lines, clsStart, clsEnd, methods, fields) {
+    let depth = 0;
+    for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
+        const line = lines[i];
+        for (const ch of line) {
+            if (ch === '{') depth++;
+            if (ch === '}') depth--;
+        }
+        if (depth !== 1) continue;
+
+        const tr = line.trim();
+        if (!tr || tr.startsWith('//') || tr.startsWith('*') || tr.startsWith('@')) continue;
+
+        // Constructor
+        const ctorm = tr.match(/^(?:(?:public|private|protected)\s+)?constructor\s*\(([^)]*)\)\s*(?:\{|$)/);
+        if (ctorm) {
+            if (tr.endsWith('{')) {
+                const lineEnd = braceEnd(lines, i);
+                methods.push({ type:'method', name:'constructor', params:clean(ctorm[1]), returnType:null, lineStart:i+1, lineEnd, description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
+                i = lineEnd - 1; depth = 1;
+            }
+            continue;
+        }
+
+        // Method (line has parens)
+        if (tr.includes('(')) {
+            const mm = tr.match(/^(?:(?:public|private|protected|static|async|abstract|override|readonly)\s+)*(\w+)\s*(?:<[^>]*>)?\s*\(([^)]*)\)\s*(?::\s*([^{;]+?))?\s*(?:\{|;|$)/);
+            if (mm && !['if','for','while','switch','try','catch','new','super','return'].includes(mm[1])) {
+                if (tr.endsWith('{')) {
+                    const lineEnd = braceEnd(lines, i);
+                    methods.push({ type:'method', name:mm[1], params:clean(mm[2]), returnType:mm[3]?mm[3].trim():null, lineStart:i+1, lineEnd, description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
+                    i = lineEnd - 1; depth = 1;
+                } else {
+                    // Abstract method or interface signature (ends with ; or nothing)
+                    methods.push({ type:'method', name:mm[1], params:clean(mm[2]), returnType:mm[3]?mm[3].trim():null, lineStart:i+1, lineEnd:i+1, description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
+                }
+                continue;
+            }
+        }
+
+        // Field/property (no parens, has : type annotation)
+        if (!tr.includes('(') && tr.includes(':')) {
+            const fm = tr.match(/^((?:(?:public|private|protected|readonly|static|abstract|override|declare)\s+)*)(\w+)\??\s*:\s*([\w<>\[\],\s|&"'`]+?)\s*(?:=.*)?;?$/);
+            if (fm && fm[2] && fm[2] !== 'constructor') {
+                const mods = fm[1].trim().split(/\s+/).filter(Boolean);
+                fields.push({
+                    name: fm[2],
+                    type: fm[3].trim(),
+                    modifiers: mods,
+                    isStatic: mods.includes('static'),
+                    isFinal: mods.includes('readonly')
+                });
+            }
+        }
+    }
+}
+
 // ── Java ───────────────────────────────────────────────────────────────────
 
 function parseJava(code) {
@@ -1537,33 +1669,17 @@ function parseJavaFields(lines, clsStart, clsEnd) {
     return fields;
 }
 
-// ── C / C++ ────────────────────────────────────────────────────────────────
+// ── C ──────────────────────────────────────────────────────────────────────
 
-function parseCLike(code, isCpp) {
-    const lines   = code.split('\n');
-    const classes = [];
-    const fns     = [];
+function parseCLike(code) {
+    const lines = code.split('\n');
+    const fns   = [];
 
     for (let i = 0; i < lines.length; i++) {
-        const trimLine = lines[i].trim();
-        if (!trimLine || trimLine.startsWith('//') || trimLine.startsWith('*') || trimLine.startsWith('#')) continue;
+        const tr = lines[i].trim();
+        if (!tr || tr.startsWith('//') || tr.startsWith('*') || tr.startsWith('#')) continue;
 
-        if (isCpp) {
-            const cm = trimLine.match(/^(?:class|struct)\s+(\w+)(?:\s*:\s*(?:public|private|protected)\s+(\w+))?\s*\{/);
-            if (cm) {
-                const lineEnd = braceEnd(lines, i);
-                const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[], fields:[] };
-                parseCppMethods(lines, i, lineEnd, cls.methods);
-                cls.fields = parseCppFields(lines, i, lineEnd);
-                classes.push(cls);
-                i = lineEnd - 1;
-                continue;
-            }
-        }
-
-        if (classes.some(c => i+1 > c.lineStart && i+1 < c.lineEnd)) continue;
-
-        const fm = trimLine.match(/^(?:static\s+|inline\s+|extern\s+)?(\w[\w\s*]*?)\s+(\w+)\s*\(([^)]*)\)\s*(?:const\s*)?\{/);
+        const fm = tr.match(/^(?:static\s+|inline\s+|extern\s+)?(\w[\w\s*]*?)\s+(\w+)\s*\(([^)]*)\)\s*(?:const\s*)?\{/);
         if (fm && fm[2] && !['if','for','while','switch','do','else','return'].includes(fm[2]) && fm[1] !== 'else') {
             const lineEnd = braceEnd(lines, i);
             fns.push({ type:'function', name:fm[2], params:clean(fm[3]), returnType:fm[1].trim(), lineStart:i+1, lineEnd,
@@ -1572,61 +1688,7 @@ function parseCLike(code, isCpp) {
         }
     }
 
-    return { classes, functions: fns, imports: parseImports(code, isCpp ? 'cpp' : 'c') };
-}
-
-function parseCppMethods(lines, clsStart, clsEnd, methods) {
-    let depth = 0;
-    for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
-        for (const ch of lines[i]) {
-            if (ch === '{') depth++;
-            if (ch === '}') depth--;
-        }
-        if (depth !== 1) continue;
-
-        const trimLine = lines[i].trim();
-        if (!trimLine || trimLine.startsWith('//') || trimLine.startsWith('*')) continue;
-
-        const mm = trimLine.match(/^(?:(?:virtual|static|inline|explicit|const|override)\s+)*(?:\w[\w\s*]*?)\s+(\w+)\s*\(([^)]*)\)\s*(?:const\s*)?\{/);
-        if (mm && !['if','for','while','switch','do'].includes(mm[1])) {
-            const lineEnd = braceEnd(lines, i);
-            methods.push({ type:'method', name:mm[1], params:clean(mm[2]), lineStart:i+1, lineEnd,
-                description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i) });
-            i = lineEnd - 1;
-            depth = 1;
-        }
-    }
-}
-
-function parseCppFields(lines, clsStart, clsEnd) {
-    const fields = [];
-    let depth = 0;
-    for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
-        for (const ch of lines[i]) {
-            if (ch === '{') depth++;
-            if (ch === '}') depth--;
-        }
-        if (depth !== 1) continue;
-
-        const tr = lines[i].trim();
-        if (!tr || tr.startsWith('//') || tr.startsWith('*')) continue;
-        if (tr.endsWith(':')) continue; // access specifiers (public:, private:)
-        if (tr.includes('(')) continue; // skip methods
-
-        // [static|const] type name [= ...] ;
-        const fm = tr.match(/^((?:(?:static|const|volatile|mutable)\s+)*)(\w[\w*&<>, ]*?)\s+(\w+)\s*(?:=.*)?;$/);
-        if (fm && fm[3] && !['public', 'private', 'protected', 'if', 'for', 'while', 'return', 'else'].includes(fm[3])) {
-            const mods = fm[1].trim().split(/\s+/).filter(Boolean);
-            fields.push({
-                name: fm[3],
-                type: fm[2].trim(),
-                modifiers: mods,
-                isStatic: mods.includes('static'),
-                isFinal: mods.includes('const')
-            });
-        }
-    }
-    return fields;
+    return { classes: [], functions: fns, imports: parseImports(code, 'c') };
 }
 
 // ─── Comment / Docstring Extraction ──────────────────────────────────────────
