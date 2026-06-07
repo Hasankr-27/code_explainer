@@ -906,8 +906,8 @@ function renderDiagram(f) {
     const HDR_H      = 52;
     const FIELD_H    = 20;
     const ROW_H      = 22;
-    const MAX_FIELDS = 5;
-    const MAX_METHS  = 6;
+    const MAX_FIELDS = 999;
+    const MAX_METHS  = 999;
     const PAD_X      = 44;
     const PAD_Y      = 54;
     const GAP_X      = 72;
