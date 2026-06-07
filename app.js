@@ -15,7 +15,7 @@ const TRANSLATIONS = {
         dropMain:'Drop files here', dropOr:'or', browse:'browse',
         dropHint:'.py .js .ts .java .c · max 50 KB',
         emptyMain:'Upload a source file to explore its structure',
-        emptyHint:'Supports Python, JavaScript, Java, C, C++',
+        emptyHint:'Supports Python, JavaScript, TypeScript, Java, C',
         noClasses:'No classes or functions detected in this file.',
         noMethods:'No methods detected', viewCode:'View Code', view:'View',
         extends:'extends', implements:'implements', creates:'new →', subclass:'↳ subclass',
@@ -25,7 +25,7 @@ const TRANSLATIONS = {
         typeAbstract:'abstract', typeInterface:'interface', typeConcrete:'class',
         noRel:'No classes found to analyze.',
         noDiag:'Upload a file to generate the diagram.',
-        errUnsupported:'is not a supported file type. Use .py .js .java .c .cpp',
+        errUnsupported:'is not a supported file type. Use .py .js .ts .java .c',
         errTooBig:'exceeds the 50 KB limit',
         imports:'IMPORTS', importsCount:'imports',
         fieldsSect:'FIELDS', methods:'METHODS', noFields:'No fields',
@@ -37,7 +37,7 @@ const TRANSLATIONS = {
         dropMain:'Dosyaları buraya bırakın', dropOr:'veya', browse:'gözat',
         dropHint:'.py .js .ts .java .c · maks 50 KB',
         emptyMain:'Yapıyı keşfetmek için bir kaynak dosyası yükleyin',
-        emptyHint:'Python, JavaScript, Java, C, C++ desteklenir',
+        emptyHint:'Python, JavaScript, TypeScript, Java, C desteklenir',
         noClasses:'Bu dosyada sınıf veya fonksiyon bulunamadı.',
         noMethods:'Metot bulunamadı', viewCode:'Kodu Gör', view:'Gör',
         extends:'genişletir', implements:'uygular', creates:'yeni →', subclass:'↳ alt sınıf',
@@ -47,7 +47,7 @@ const TRANSLATIONS = {
         typeAbstract:'soyut', typeInterface:'arayüz', typeConcrete:'sınıf',
         noRel:'Analiz edilecek sınıf bulunamadı.',
         noDiag:'Diyagram oluşturmak için dosya yükleyin.',
-        errUnsupported:'desteklenmeyen dosya türü. .py .js .java .c .cpp kullanın',
+        errUnsupported:'desteklenmeyen dosya türü. .py .js .ts .java .c kullanın',
         errTooBig:'50 KB sınırını aşıyor',
         imports:'İÇE AKTARMALAR', importsCount:'içe aktarma',
         fieldsSect:'ALANLAR', methods:'METODLAR', noFields:'Alan yok',
@@ -550,10 +550,12 @@ function buildMethodCard(m) {
     const card = mk('div', 'm-card');
 
     const hdr = mk('div', 'm-hdr');
+    const retLabel = m.returnType || 'void';
+    const retClass = (!m.returnType || m.returnType === 'void' || m.returnType === 'None') ? 'ret-badge ret-void' : 'ret-badge';
     hdr.innerHTML = `
         <span class="badge badge-method">method</span>
         <span class="m-name" title="${esc(m.name)}">${esc(m.name)}</span>
-        ${m.returnType ? `<span class="ret-badge">${esc(m.returnType)}</span>` : ''}
+        <span class="${retClass}">${esc(retLabel)}</span>
         <span class="m-line">L${m.lineStart}</span>
         <button class="view-btn">${t('viewCode')}</button>
     `;
@@ -1500,11 +1502,12 @@ function parseJSMethods(lines, clsStart, clsEnd, methods) {
     let depth = 0;
     for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
         const line = lines[i];
+        const prevDepth = depth;
         for (const ch of line) {
             if (ch === '{') depth++;
             if (ch === '}') depth--;
         }
-        if (depth !== 1) continue;
+        if (prevDepth !== 1) continue;
 
         const trimLine = line.trim();
         if (!trimLine || trimLine.startsWith('//') || trimLine.startsWith('*')) continue;
@@ -1637,11 +1640,12 @@ function parseTSMembers(lines, clsStart, clsEnd, methods, fields) {
     let depth = 0;
     for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
         const line = lines[i];
+        const prevDepth = depth;
         for (const ch of line) {
             if (ch === '{') depth++;
             if (ch === '}') depth--;
         }
-        if (depth !== 1) continue;
+        if (prevDepth !== 1) continue;
 
         const tr = line.trim();
         if (!tr || tr.startsWith('//') || tr.startsWith('*') || tr.startsWith('@')) continue;
@@ -1716,11 +1720,12 @@ function parseJava(code) {
 function parseJavaMethods(lines, clsStart, clsEnd, methods) {
     let depth = 0;
     for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
+        const prevDepth = depth;
         for (const ch of lines[i]) {
             if (ch === '{') depth++;
             if (ch === '}') depth--;
         }
-        if (depth !== 1) continue;
+        if (prevDepth !== 1) continue;
 
         const trimLine = lines[i].trim();
         if (!trimLine || trimLine.startsWith('//') || trimLine.startsWith('*') || trimLine.startsWith('@')) continue;
@@ -1740,11 +1745,12 @@ function parseJavaFields(lines, clsStart, clsEnd) {
     const fields = [];
     let depth = 0;
     for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
+        const prevDepth = depth;
         for (const ch of lines[i]) {
             if (ch === '{') depth++;
             if (ch === '}') depth--;
         }
-        if (depth !== 1) continue;
+        if (prevDepth !== 1) continue;
 
         const tr = lines[i].trim();
         if (!tr || tr.startsWith('//') || tr.startsWith('*') || tr.startsWith('@')) continue;
