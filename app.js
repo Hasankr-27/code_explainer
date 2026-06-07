@@ -1719,7 +1719,7 @@ function parseJava(code) {
         const trimLine = lines[i].trim();
         if (!trimLine || trimLine.startsWith('//') || trimLine.startsWith('*')) continue;
 
-        const cm = trimLine.match(/^(?:(?:public|private|protected|abstract|final|static)\s+)*(?:class|interface|enum)\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+[\w\s,<>]+)?\s*\{/);
+        const cm = trimLine.match(/^(?:(?:public|private|protected|abstract|final|static)\s+)*(?:class|interface|enum)\s+(\w+)(?:<(?:[^<>]|<[^<>]*>)*>)?(?:\s+extends\s+(\w[\w<>, .]*))?(?:\s+implements\s+[\w\s,<>.]+)?\s*\{/);
         if (cm) {
             const lineEnd = braceEnd(lines, i);
             const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[], fields:[] };
@@ -1865,15 +1865,19 @@ function blockCommentBefore(lines, idx) {
 // ─── Parser Helpers ───────────────────────────────────────────────────────────
 
 function braceEnd(lines, startLine) {
-    let depth = 0, opened = false;
+    let depth = 0, opened = false, inBlockComment = false;
     for (let i = startLine; i < lines.length; i++) {
         const line = lines[i];
         let inStr = false, strCh = '', skip = false;
         for (let j = 0; j < line.length; j++) {
             const ch = line[j], nx = line[j+1];
             if (skip) { skip = false; continue; }
+            if (inBlockComment) {
+                if (ch === '*' && nx === '/') { inBlockComment = false; j++; }
+                continue;
+            }
             if (!inStr && ch === '/' && nx === '/') break;
-            if (!inStr && ch === '/' && nx === '*') { j++; continue; }
+            if (!inStr && ch === '/' && nx === '*') { inBlockComment = true; j++; continue; }
             if (!inStr && (ch === '"' || ch === "'" || ch === '`')) { inStr = true; strCh = ch; continue; }
             if (inStr && ch === '\\') { skip = true; continue; }
             if (inStr && ch === strCh) { inStr = false; continue; }
