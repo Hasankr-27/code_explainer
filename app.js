@@ -417,11 +417,10 @@ function buildClassCard(cls, type) {
 
     card.appendChild(body);
 
-    // Toggle on header click
+    // Toggle on header click — card.open is the single source of truth
     hdr.addEventListener('click', e => {
         if (e.target.classList.contains('view-btn')) return;
-        const opening = !body.classList.contains('expanded');
-        body.classList.toggle('expanded', opening);
+        const opening = !card.classList.contains('open');
         card.classList.toggle('open', opening);
         chevron.style.transform = opening ? '' : 'rotate(-90deg)';
     });
@@ -527,8 +526,7 @@ function buildFnCard(fn) {
 
         hdr.addEventListener('click', e => {
             if (e.target.classList.contains('view-btn')) return;
-            const opening = !body.classList.contains('expanded');
-            body.classList.toggle('expanded', opening);
+            const opening = !card.classList.contains('open');
             card.classList.toggle('open', opening);
             chevron.style.transform = opening ? '' : 'rotate(-90deg)';
         });

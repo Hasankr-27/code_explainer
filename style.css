@@ -365,7 +365,7 @@ body {
     transition: max-height 0.28s ease;
     border-top: 0px solid var(--border-dim);
 }
-.s-card-body.expanded {
+.s-card.open > .s-card-body {
     max-height: 4000px;
     border-top-width: 1px;
 }
