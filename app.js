@@ -1,10 +1,10 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_SIZE  = 50 * 1024;
-const SUPPORTED = ['.py', '.js', '.java', '.cs'];
+const SUPPORTED = ['.py', '.js', '.java'];
 
-const LANG_COLOR = { py:'#3572A5', js:'#c9a800', java:'#B07219', cs:'#9B4F96' };
-const HLJS_LANG  = { py:'python', js:'javascript', java:'java', cs:'csharp' };
+const LANG_COLOR = { py:'#3572A5', js:'#c9a800', java:'#B07219' };
+const HLJS_LANG  = { py:'python', js:'javascript', java:'java' };
 
 // ─── Translations ─────────────────────────────────────────────────────────────
 
@@ -13,9 +13,9 @@ const TRANSLATIONS = {
         files:'FILES', source:'SOURCE',
         tabStruct:'Structure', tabRel:'Relations', tabDiag:'Diagram',
         dropMain:'Drop files here', dropOr:'or', browse:'browse',
-        dropHint:'.py .js .java .cs · max 50 KB',
+        dropHint:'.py .js .java · max 50 KB',
         emptyMain:'Upload a source file to explore its structure',
-        emptyHint:'Supports Python, JavaScript, Java, C#',
+        emptyHint:'Supports Python, JavaScript, Java',
         noClasses:'No classes or functions detected in this file.',
         noMethods:'No methods detected', viewCode:'View Code', view:'View',
         extends:'extends', implements:'implements', creates:'new →', subclass:'↳ subclass',
@@ -25,7 +25,7 @@ const TRANSLATIONS = {
         typeAbstract:'abstract', typeInterface:'interface', typeConcrete:'class',
         noRel:'No classes found to analyze.',
         noDiag:'Upload a file to generate the diagram.',
-        errUnsupported:'is not a supported file type. Use .py .js .java .cs',
+        errUnsupported:'is not a supported file type. Use .py .js .java',
         errTooBig:'exceeds the 50 KB limit',
         imports:'IMPORTS', importsCount:'imports',
         fieldsSect:'FIELDS', methods:'METHODS', noFields:'No fields',
@@ -35,9 +35,9 @@ const TRANSLATIONS = {
         files:'DOSYALAR', source:'KAYNAK',
         tabStruct:'Yapı', tabRel:'İlişkiler', tabDiag:'Diyagram',
         dropMain:'Dosyaları buraya bırakın', dropOr:'veya', browse:'gözat',
-        dropHint:'.py .js .java .cs · maks 50 KB',
+        dropHint:'.py .js .java · maks 50 KB',
         emptyMain:'Yapıyı keşfetmek için bir kaynak dosyası yükleyin',
-        emptyHint:'Python, JavaScript, Java, C# desteklenir',
+        emptyHint:'Python, JavaScript, Java desteklenir',
         noClasses:'Bu dosyada sınıf veya fonksiyon bulunamadı.',
         noMethods:'Metot bulunamadı', viewCode:'Kodu Gör', view:'Gör',
         extends:'genişletir', implements:'uygular', creates:'yeni →', subclass:'↳ alt sınıf',
@@ -47,7 +47,7 @@ const TRANSLATIONS = {
         typeAbstract:'soyut', typeInterface:'arayüz', typeConcrete:'sınıf',
         noRel:'Analiz edilecek sınıf bulunamadı.',
         noDiag:'Diyagram oluşturmak için dosya yükleyin.',
-        errUnsupported:'desteklenmeyen dosya türü. .py .js .java .cs kullanın',
+        errUnsupported:'desteklenmeyen dosya türü. .py .js .java kullanın',
         errTooBig:'50 KB sınırını aşıyor',
         imports:'İÇE AKTARMALAR', importsCount:'içe aktarma',
         fieldsSect:'ALANLAR', methods:'METODLAR', noFields:'Alan yok',
@@ -1294,7 +1294,6 @@ function parseCode(code, ext) {
         case 'py':   return parsePython(code);
         case 'js':   return parseJS(code);
         case 'java': return parseJava(code);
-        case 'cs':   return parseCSharp(code);
         default:     return { classes: [], functions: [], imports: [] };
     }
 }
@@ -1339,9 +1338,6 @@ function parseImports(code, ext) {
         } else if (ext === 'c') {
             const m = trimLine.match(/^#include\s+[<"]([^>"]+)[>"]/);
             if (m) imports.push(m[1]);
-        } else if (ext === 'cs') {
-            const m = trimLine.match(/^using\s+([\w.]+)\s*;/);
-            if (m && !m[1].startsWith('(')) imports.push(m[1]);
         }
     }
 
@@ -1791,121 +1787,6 @@ function parseJavaFields(lines, clsStart, clsEnd) {
         }
     }
     return fields;
-}
-
-// ── C# ─────────────────────────────────────────────────────────────────────
-
-function parseCSharp(code) {
-    const lines   = code.split('\n');
-    const classes = [];
-
-    for (let i = 0; i < lines.length; i++) {
-        const trimLine = lines[i].trim();
-        if (!trimLine || trimLine.startsWith('//') || trimLine.startsWith('*')) continue;
-
-        // class / interface / enum / struct / record — with optional generics, base types
-        const cm = trimLine.match(/^(?:(?:public|private|protected|internal|static|abstract|sealed|partial|readonly)\s+)*(?:class|interface|enum|struct|record)\s+(\w+)(?:<(?:[^<>]|<[^<>]*>)*>)?(?:\s*:\s*[\w\s,<>.[\]]+)?\s*\{?/);
-        if (cm && !trimLine.includes('(')) {
-            // find opening brace — might be on next line
-            let braceStart = i;
-            if (!lines[i].includes('{')) {
-                for (let k = i + 1; k < Math.min(i + 4, lines.length); k++) {
-                    if (lines[k].trim().startsWith('{')) { braceStart = k; break; }
-                }
-            }
-            const lineEnd = braceEnd(lines, braceStart);
-            const csType = trimLine.match(/\b(interface|enum|struct|record)\b/) ?
-                (trimLine.match(/\binterface\b/) ? 'interface' :
-                 trimLine.match(/\benum\b/) ? 'enum' :
-                 trimLine.match(/\bstruct\b/) ? 'struct' : 'concrete') :
-                (trimLine.match(/\babstract\b/) ? 'abstract' : 'concrete');
-            const basesM = trimLine.match(/:\s*([\w\s,<>.[\]]+?)\s*(?:\{|$)/);
-            const bases = basesM ? basesM[1].split(',').map(s => s.trim().replace(/<.*?>/, '')).filter(Boolean)[0] || '' : '';
-            const cls = { type:'class', name:cm[1], bases, lineStart:i+1, lineEnd, methods:[], fields:[], tsType: csType };
-            parseCSharpMembers(lines, braceStart, lineEnd, cls.methods, cls.fields);
-            classes.push(cls);
-            i = lineEnd - 1;
-        }
-    }
-
-    return { classes, functions: [], imports: parseImports(code, 'cs') };
-}
-
-function parseCSharpMembers(lines, clsStart, clsEnd, methods, fields) {
-    let depth = 0;
-    const MODS = 'public|private|protected|internal|static|abstract|virtual|override|sealed|async|extern|readonly|new';
-    for (let i = clsStart; i < clsEnd && i < lines.length; i++) {
-        const prevDepth = depth;
-        for (const ch of lines[i]) {
-            if (ch === '{') depth++;
-            if (ch === '}') depth--;
-        }
-        if (prevDepth !== 1) continue;
-
-        const tr = lines[i].trim();
-        if (!tr || tr.startsWith('//') || tr.startsWith('*') || tr.startsWith('[')) continue;
-        if (tr.startsWith('{') || tr.startsWith('}')) continue;
-
-        // Join continuation lines when param list spans multiple lines
-        let joined = tr;
-        if (tr.includes('(') && !tr.includes(')')) {
-            for (let k = i + 1; k < Math.min(i + 8, clsEnd); k++) {
-                joined += ' ' + lines[k].trim();
-                if (lines[k].includes(')')) break;
-            }
-        }
-
-        // Method: [mods] ReturnType Name<T>(...) {  OR  constructor: Name(...)
-        const mm = joined.match(new RegExp(
-            `^(?:(?:${MODS})\\s+)*` +
-            `(?:<[^>]+>\\s+)?` +
-            `((?:void|\\w[\\w<>\\[\\],\\s\\.?]*?))\\s+` +
-            `(\\w+)\\s*(?:<[^>]*>)?\\s*\\(([^)]*)\\)` +
-            `(?:\\s*(?:where|throws)[^{]*)?\\s*(?:\\{|=>|;)`
-        ));
-        if (mm && !['if','for','foreach','while','switch','try','catch','using','lock','return'].includes(mm[2])) {
-            // skip property bodies (get/set without params variation)
-            if (['get','set','init','add','remove'].includes(mm[2]) && mm[3].trim() === '') continue;
-            const lineEnd = tr.endsWith(';') ? i + 1 : braceEnd(lines, i);
-            methods.push({
-                type:'method', name:mm[2], params:clean(mm[3]),
-                returnType: mm[1].trim(),
-                lineStart: i+1, lineEnd,
-                description: blockCommentBefore(lines,i)||lineCommentsBefore(lines,i)
-            });
-            if (!tr.endsWith(';')) i = lineEnd - 1, depth = 1;
-            continue;
-        }
-
-        // Property: [mods] Type Name { get; set; } OR => ...
-        const pm = tr.match(new RegExp(
-            `^(?:(?:${MODS})\\s+)*(\\w[\\w<>\\[\\],\\s\\.?]*?)\\s+(\\w+)\\s*(?:\\{|=>)`
-        ));
-        if (pm && pm[2] && !['if','for','foreach','while','switch','else','class','struct'].includes(pm[2])) {
-            const mods = tr.match(new RegExp(`(?:${MODS})`, 'g')) || [];
-            fields.push({
-                name: pm[2], type: pm[1].trim(),
-                modifiers: mods,
-                isStatic: mods.includes('static'),
-                isFinal: mods.includes('readonly')
-            });
-            continue;
-        }
-
-        // Field: [mods] Type name [= ...] ;
-        const fm = tr.match(new RegExp(
-            `^((?:(?:${MODS})\\s+)*)(\\w[\\w<>\\[\\],\\s\\.?]*?)\\s+(\\w+)\\s*(?:=.*)?;$`
-        ));
-        if (fm && fm[3] && !['if','for','foreach','while','class','return'].includes(fm[3]) && !tr.includes('(')) {
-            const mods = (fm[1].trim().split(/\s+/)).filter(Boolean);
-            fields.push({
-                name: fm[3], type: fm[2].trim(),
-                modifiers: mods,
-                isStatic: mods.includes('static'),
-                isFinal: mods.includes('readonly')
-            });
-        }
-    }
 }
 
 // ── C ──────────────────────────────────────────────────────────────────────

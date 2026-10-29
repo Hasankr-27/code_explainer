@@ -5,7 +5,7 @@ A pure front-end web app that parses source code in the browser and visualises i
 ## Features
 
 - **Drag-and-drop** or browse to upload one or more files
-- **Supported languages:** Python · JavaScript · Java · C#
+- **Supported languages:** Python · JavaScript · Java
 - **Structure tab** — class cards with fields, methods, return types, and object-creation calls
 - **Relations tab** — inheritance, interface implementation, and instantiation map
 - **Diagram tab** — interactive SVG class diagram, draggable nodes
@@ -50,7 +50,6 @@ Each language has its own regex-based static parser that runs entirely in the br
 | Python     | ✓       | ✓       | `self.x`, annotations | `import`, `from … import` |
 | JavaScript | ✓       | ✓       | Class fields        | `import`, `require` |
 | Java       | ✓       | ✓       | Field declarations  | `import`    |
-| C#         | ✓ (class, interface, enum, struct, record, abstract) | ✓ | Fields + properties | `using` |
 
 ## License
 
