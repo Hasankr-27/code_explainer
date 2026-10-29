@@ -1741,7 +1741,16 @@ function parseJavaMethods(lines, clsStart, clsEnd, methods) {
         const trimLine = lines[i].trim();
         if (!trimLine || trimLine.startsWith('//') || trimLine.startsWith('*') || trimLine.startsWith('@')) continue;
 
-        const mm = trimLine.match(/^(?:(?:public|private|protected|static|final|abstract|synchronized|default|native)\s+)*(?:<[^>]+>\s+)?(\w[\w<>\[\]]*)\s+(\w+)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*\{/);
+        // Join continuation lines when param list spans multiple lines
+        let joinedLine = trimLine;
+        if (trimLine.includes('(') && !trimLine.includes(')')) {
+            for (let k = i + 1; k < Math.min(i + 8, clsEnd); k++) {
+                joinedLine += ' ' + lines[k].trim();
+                if (lines[k].includes(')')) break;
+            }
+        }
+
+        const mm = joinedLine.match(/^(?:(?:public|private|protected|static|final|abstract|synchronized|default|native)\s+)*(?:<(?:[^<>]|<[^<>]*>)*>\s+)?(\w[\w<>\[\]]*)\s+(\w+)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*\{/);
         if (mm && !['if','for','while','switch','try'].includes(mm[2])) {
             const lineEnd = braceEnd(lines, i);
             methods.push({ type:'method', name:mm[2], params:clean(mm[3]), returnType:mm[1], lineStart:i+1, lineEnd,
@@ -1837,8 +1846,17 @@ function parseCSharpMembers(lines, clsStart, clsEnd, methods, fields) {
         if (!tr || tr.startsWith('//') || tr.startsWith('*') || tr.startsWith('[')) continue;
         if (tr.startsWith('{') || tr.startsWith('}')) continue;
 
+        // Join continuation lines when param list spans multiple lines
+        let joined = tr;
+        if (tr.includes('(') && !tr.includes(')')) {
+            for (let k = i + 1; k < Math.min(i + 8, clsEnd); k++) {
+                joined += ' ' + lines[k].trim();
+                if (lines[k].includes(')')) break;
+            }
+        }
+
         // Method: [mods] ReturnType Name<T>(...) {  OR  constructor: Name(...)
-        const mm = tr.match(new RegExp(
+        const mm = joined.match(new RegExp(
             `^(?:(?:${MODS})\\s+)*` +
             `(?:<[^>]+>\\s+)?` +
             `((?:void|\\w[\\w<>\\[\\],\\s\\.?]*?))\\s+` +
