@@ -40,6 +40,10 @@
     <aside class="left-panel">
 
         <div id="upload-section" class="upload-section">
+            <div class="input-tabs">
+                <button class="input-tab active" id="tab-upload" onclick="switchInputTab('upload')" data-t="tabUpload">Upload</button>
+                <button class="input-tab" id="tab-paste" onclick="switchInputTab('paste')" data-t="tabPaste">Paste</button>
+            </div>
             <div id="drop-zone" class="drop-zone">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -51,6 +55,17 @@
                 <p class="drop-or"><span data-t="dropOr">or</span> <button id="browse-btn" class="text-btn" data-t="browse">browse</button></p>
                 <p class="drop-hint" data-t="dropHint">.py .js .java · max 50 KB</p>
                 <input type="file" id="file-input" multiple accept=".py,.js,.java" hidden>
+            </div>
+            <div id="paste-panel" class="paste-panel hidden">
+                <div class="paste-controls">
+                    <select id="paste-lang" class="lang-select">
+                        <option value="py">Python</option>
+                        <option value="js">JavaScript</option>
+                        <option value="java">Java</option>
+                    </select>
+                    <button id="paste-analyze-btn" class="analyze-btn" data-t="analyzeBtn">Analyze</button>
+                </div>
+                <textarea id="paste-area" class="paste-area" data-t-placeholder="pastePlaceholder" placeholder="Paste your code here…" spellcheck="false"></textarea>
             </div>
         </div>
 

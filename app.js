@@ -27,6 +27,10 @@ const TRANSLATIONS = {
         noDiag:'Upload a file to generate the diagram.',
         errUnsupported:'is not a supported file type. Use .py .js .java',
         errTooBig:'exceeds the 50 KB limit',
+        tabUpload:'Upload', tabPaste:'Paste',
+        analyzeBtn:'Analyze',
+        pastePlaceholder:'Paste your code here…',
+        errEmptyPaste:'Paste some code before clicking Analyze.',
         imports:'IMPORTS', importsCount:'imports',
         fieldsSect:'FIELDS', methods:'METHODS', noFields:'No fields',
         objCreations:'Object Creations', noObjCreations:'No instantiations'
@@ -49,6 +53,10 @@ const TRANSLATIONS = {
         noDiag:'Diyagram oluşturmak için dosya yükleyin.',
         errUnsupported:'desteklenmeyen dosya türü. .py .js .java kullanın',
         errTooBig:'50 KB sınırını aşıyor',
+        tabUpload:'Yükle', tabPaste:'Yapıştır',
+        analyzeBtn:'Analiz Et',
+        pastePlaceholder:'Kodunuzu buraya yapıştırın…',
+        errEmptyPaste:'Analiz etmeden önce kod yapıştırın.',
         imports:'İÇE AKTARMALAR', importsCount:'içe aktarma',
         fieldsSect:'ALANLAR', methods:'METODLAR', noFields:'Alan yok',
         objCreations:'Oluşturulan Nesneler', noObjCreations:'Nesne oluşturulmadı'
@@ -63,6 +71,7 @@ function switchLang(newLang) {
     $('btn-en').classList.toggle('active', uiLang === 'en');
     $('btn-tr').classList.toggle('active', uiLang === 'tr');
     document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
+    document.querySelectorAll('[data-t-placeholder]').forEach(el => { el.placeholder = t(el.dataset.tPlaceholder); });
     if (activeIdx !== null) renderAll();
 }
 
@@ -97,8 +106,13 @@ const closeToast       = $('close-toast');
 const fileIndicator    = $('file-indicator');
 const activeFileName   = $('active-file-name');
 const activeFileLang   = $('active-file-lang');
+const pastePanel       = $('paste-panel');
+const pasteArea        = $('paste-area');
+const pasteLang        = $('paste-lang');
+const pasteAnalyzeBtn  = $('paste-analyze-btn');
 
 let activeTab = 'struct';
+let activeInputTab = 'upload';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -162,6 +176,40 @@ function selectFile(idx) {
     clearHighlight();
     renderAll();
 }
+
+// ─── Input Tab Switching (Upload vs Paste) ────────────────────────────────────
+
+function switchInputTab(tab) {
+    activeInputTab = tab;
+    $('tab-upload').classList.toggle('active', tab === 'upload');
+    $('tab-paste').classList.toggle('active', tab === 'paste');
+    dropZone.classList.toggle('hidden', tab !== 'upload');
+    pastePanel.classList.toggle('hidden', tab !== 'paste');
+}
+
+function addPasted(code, ext) {
+    const content = code.trim();
+    if (!content) { showError(t('errEmptyPaste')); return; }
+    let baseName = 'snippet.' + ext;
+    let name = baseName, n = 2;
+    while (files.some(f => f.name === name)) name = `snippet-${n++}.${ext}`;
+    try {
+        files.push({ name, size: content.length, ext, content, parsed: parseCode(content, ext) });
+        if (activeIdx === null) activeIdx = files.length - 1;
+        pasteArea.value = '';
+        renderAll();
+    } catch (err) {
+        showError(`Parse error: ${err.message}`);
+    }
+}
+
+pasteAnalyzeBtn.addEventListener('click', () => addPasted(pasteArea.value, pasteLang.value));
+pasteArea.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        addPasted(pasteArea.value, pasteLang.value);
+    }
+});
 
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 
