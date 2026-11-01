@@ -831,8 +831,9 @@ function renderRelations(f) {
         const childrenOf = {};
         classes.forEach(cls => {
             if (cls.bases) {
-                if (!childrenOf[cls.bases]) childrenOf[cls.bases] = [];
-                childrenOf[cls.bases].push(cls);
+                const bname = cls.bases.replace(/<[^>]*>/g, '').trim();
+                if (!childrenOf[bname]) childrenOf[bname] = [];
+                childrenOf[bname].push(cls);
             }
         });
         Object.entries(childrenOf).forEach(([parent, children]) => {
@@ -1275,7 +1276,8 @@ function drawArrows(rel, layer, classes) {
     layer.innerHTML = '';
     classes.forEach(cls => {
         if (!cls.bases) return;
-        const from = diagPositions[cls.name], to = diagPositions[cls.bases];
+        const baseName = cls.bases.replace(/<[^>]*>/g, '').trim();
+        const from = diagPositions[cls.name], to = diagPositions[baseName];
         if (from && to) drawArrow(layer, from, to, '#4ec9b0', 'none', 'mk-ext');
     });
     Object.entries(rel.implementsMap).forEach(([clsName, ifaces]) => {
@@ -1762,7 +1764,7 @@ function parseJava(code) {
         const cm = trimLine.match(/^(?:(?:public|private|protected|abstract|final|static)\s+)*(?:class|interface|enum)\s+(\w+)(?:<(?:[^<>]|<[^<>]*>)*>)?(?:\s+extends\s+(\w[\w<>, .]*))?(?:\s+implements\s+[\w\s,<>.]+)?\s*\{/);
         if (cm) {
             const lineEnd = braceEnd(lines, i);
-            const cls = { type:'class', name:cm[1], bases:cm[2]||'', lineStart:i+1, lineEnd, methods:[], fields:[] };
+            const cls = { type:'class', name:cm[1], bases:(cm[2]||'').replace(/<[^>]*>/g,'').trim(), lineStart:i+1, lineEnd, methods:[], fields:[] };
             parseJavaMethods(lines, i, lineEnd, cls.methods);
             cls.fields = parseJavaFields(lines, i, lineEnd);
             classes.push(cls);
